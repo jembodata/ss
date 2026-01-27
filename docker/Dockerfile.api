@@ -6,7 +6,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 make g++ \
   && rm -rf /var/lib/apt/lists/*
 
-COPY .npmrc package.json ./
+COPY package.json ./
 COPY packages/shared ./packages/shared
 COPY apps/api/package.json apps/api/package-lock.json apps/api/prisma.config.ts ./apps/api/
 COPY apps/api/prisma ./apps/api/prisma

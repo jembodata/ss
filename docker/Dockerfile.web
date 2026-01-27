@@ -2,7 +2,7 @@ FROM node:20-bullseye-slim AS deps
 
 WORKDIR /app
 
-COPY .npmrc package.json ./
+COPY package.json ./
 COPY apps/web/package.json apps/web/package-lock.json ./apps/web/
 
 RUN npm ci --prefix apps/web
