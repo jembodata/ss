@@ -15,7 +15,7 @@ services:
     volumes:
       - minio_data:/data
     ports:
-      - "9000:9000"
+      - "9005:9000"
       - "9001:9001"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/ready"]
@@ -52,7 +52,7 @@ services:
     volumes:
       - api_data:/data
     ports:
-      - "8081:8081"
+      - "8082:8081"
 
   worker:
     build:
@@ -85,7 +85,7 @@ services:
     depends_on:
       - api
     ports:
-      - "3000:3000"
+      - "3006:3000"
 
 volumes:
   api_data:
