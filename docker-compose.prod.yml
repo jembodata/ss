@@ -75,6 +75,8 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.web
+      args:
+        NEXT_PUBLIC_API_BASE: ${NEXT_PUBLIC_API_BASE}
     restart: unless-stopped
     env_file: .env
     environment:
