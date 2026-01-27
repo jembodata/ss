@@ -43,6 +43,7 @@ type Capture = {
   fullPage?: boolean;
   selector?: string;
 };
+const pressKeyHint = "Keys: Enter, Tab, Escape, ArrowUp/Down/Left/Right, Backspace, Delete, Home, End, PageUp, PageDown";
 
 function cronToTime(cron: string) {
   const match = String(cron || "").trim().match(/^(\d{1,2})\s+(\d{1,2})\s+\*\s+\*\s+\*$/);
@@ -65,6 +66,7 @@ function parseTimes(raw: string) {
 
 export default function JobsPage() {
   const [jobs, setJobs] = useState<any[]>([]);
+  const [profiles, setProfiles] = useState<Record<string, string>>({});
   const [schedules, setSchedules] = useState<Record<string, Schedule[]>>({});
   const [running, setRunning] = useState<Set<string>>(new Set());
   const [status, setStatus] = useState("");
@@ -105,6 +107,16 @@ export default function JobsPage() {
   useEffect(() => {
     refresh();
     api.notifications.list().then(setNotifications).catch(() => {});
+    api.profiles
+      .list()
+      .then((list) => {
+        const map: Record<string, string> = {};
+        list.forEach((p: any) => {
+          map[p.id] = p.name || p.id;
+        });
+        setProfiles(map);
+      })
+      .catch(() => {});
     const a = setInterval(loadRunning, 10000);
     const b = setInterval(loadSchedules, 15000);
     return () => {
@@ -251,7 +263,8 @@ export default function JobsPage() {
       }
       setEditStatus("Saved.");
       await refresh();
-      push("success", "Job saved", editJob.id);
+      push("success", "Job saved", editName || editJob.id);
+      closeEdit();
     } catch (err: any) {
       setEditStatus(err.message || "Save failed.");
       push("error", "Save failed", err.message || "Save failed.");
@@ -301,7 +314,7 @@ export default function JobsPage() {
                     </Tag>
                   </TableCell>
                   <TableCell>{job.name}</TableCell>
-                  <TableCell>{job.profile_id}</TableCell>
+                  <TableCell>{profiles[job.profile_id] || job.profile_id}</TableCell>
                   <TableCell>{job.config?.startUrl}</TableCell>
                   <TableCell>{sched.length ? sched.map((s) => `${cronToTime(s.cron)} (${s.mode})`).join(", ") : "-"}</TableCell>
                   <TableCell>
@@ -486,6 +499,9 @@ export default function JobsPage() {
                           onChange={(e) => setEditLoginStepKey(e.target.value)}
                         />
                       )}
+                      {editLoginStepType === "press" && (
+                        <div className="text-xs text-muted">{pressKeyHint}</div>
+                      )}
                       {editLoginStepType === "waitForURL" && (
                         <TextInput
                           id="edit-login-step-url"
@@ -663,6 +679,9 @@ export default function JobsPage() {
                       onChange={(e) => setEditPostStepKey(e.target.value)}
                     />
                   )}
+                  {editPostStepType === "press" && (
+                    <div className="text-xs text-muted">{pressKeyHint}</div>
+                  )}
                   {editPostStepType === "waitForURL" && (
                     <TextInput
                       id="edit-post-step-url"
@@ -735,6 +754,15 @@ export default function JobsPage() {
                         }
                         setEditPostStepStatus("");
                         const next = [...(editJobCfg.postLoginSteps || []), step];
+                        const hasPostLoginCapture = editCaptures.some(
+                          (c) => c.phase === "postLogin" || c.phase === "both"
+                        );
+                        if (!hasPostLoginCapture) {
+                          setEditCaptures([
+                            ...editCaptures,
+                            { name: "post-login", phase: "postLogin", mode: "page", fullPage: false }
+                          ]);
+                        }
                         setEditJobCfg({ ...editJobCfg, postLoginSteps: next });
                       }}
                     >
@@ -786,16 +814,20 @@ export default function JobsPage() {
                         <SelectItem value="page" text="page" />
                         <SelectItem value="element" text="element" />
                       </Select>
-                      <TextInput
-                        id={`edit-cap-selector-${idx}`}
-                        labelText="Selector"
-                        value={cap.selector || ""}
-                        onChange={(e) => {
-                          const next = [...editCaptures];
-                          next[idx] = { ...next[idx], selector: e.target.value };
-                          setEditCaptures(next);
-                        }}
-                      />
+                      {cap.mode === "element" ? (
+                        <TextInput
+                          id={`edit-cap-selector-${idx}`}
+                          labelText="Selector"
+                          value={cap.selector || ""}
+                          onChange={(e) => {
+                            const next = [...editCaptures];
+                            next[idx] = { ...next[idx], selector: e.target.value };
+                            setEditCaptures(next);
+                          }}
+                        />
+                      ) : (
+                        <div className="text-xs text-muted">Selector not required</div>
+                      )}
                       <Checkbox
                         id={`edit-cap-fullpage-${idx}`}
                         labelText="Full page"

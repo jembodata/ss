@@ -85,6 +85,7 @@ const userAgentPresets: Record<string, string> = {
   edgeWindows:
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36 Edg/122.0.0.0"
 };
+const pressKeyHint = "Keys: Enter, Tab, Escape, ArrowUp/Down/Left/Right, Backspace, Delete, Home, End, PageUp, PageDown";
 
 function parseTimes(raw: string) {
   const input = raw.trim();
@@ -568,7 +569,7 @@ export default function Page() {
                   />
                   {jobCfg.login.enabled ? (
                     <>
-                      <div className="mt-3 text-xs text-muted">Login flow builder (n8n-style)</div>
+                      <div className="mt-3 text-xs text-muted">Login flow builder</div>
                       <div className="mt-2 grid grid-cols-2 gap-3">
                         <TextInput
                           id="login-user-selector"
@@ -755,14 +756,17 @@ export default function Page() {
                             onChange={(e) => setLoginStepValue(e.target.value)}
                           />
                         )}
-                        {loginStepType === "press" && (
-                          <TextInput
-                            id="login-step-key"
-                            labelText="Key (Enter, Tab, ArrowDown, etc.)"
-                            value={loginStepKey}
-                            onChange={(e) => setLoginStepKey(e.target.value)}
-                          />
-                        )}
+                      {loginStepType === "press" && (
+                        <TextInput
+                          id="login-step-key"
+                          labelText="Key (Enter, Tab, ArrowDown, etc.)"
+                          value={loginStepKey}
+                          onChange={(e) => setLoginStepKey(e.target.value)}
+                        />
+                      )}
+                      {loginStepType === "press" && (
+                        <div className="text-xs text-muted">{pressKeyHint}</div>
+                      )}
                         {loginStepType === "waitForURL" && (
                           <TextInput
                             id="login-step-url"
@@ -924,6 +928,9 @@ export default function Page() {
                               onChange={(e) => setPostStepKey(e.target.value)}
                             />
                           )}
+                          {postStepType === "press" && (
+                            <div className="text-xs text-muted">{pressKeyHint}</div>
+                          )}
                           {postStepType === "waitForURL" && (
                             <TextInput
                               id="post-step-url"
@@ -996,6 +1003,15 @@ export default function Page() {
                                 }
                                 setPostStepStatus("");
                                 const next = [...(jobCfg.postLoginSteps || []), step];
+                                const hasPostLoginCapture = captures.some(
+                                  (c) => c.phase === "postLogin" || c.phase === "both"
+                                );
+                                if (!hasPostLoginCapture) {
+                                  setCaptures([
+                                    ...captures,
+                                    { name: "post-login", phase: "postLogin", mode: "page", fullPage: false }
+                                  ]);
+                                }
                                 setJobCfg({ ...jobCfg, postLoginSteps: next });
                               }}
                             >
@@ -1056,16 +1072,20 @@ export default function Page() {
                             <SelectItem value="page" text="page" />
                             <SelectItem value="element" text="element" />
                           </Select>
-                          <TextInput
-                            id={`cap-selector-${idx}`}
-                            labelText="Selector"
-                            value={cap.selector || ''}
-                            onChange={(e) => {
-                              const next = [...captures];
-                              next[idx] = { ...next[idx], selector: e.target.value };
-                              setCaptures(next);
-                            }}
-                          />
+                          {cap.mode === "element" ? (
+                            <TextInput
+                              id={`cap-selector-${idx}`}
+                              labelText="Selector"
+                              value={cap.selector || ""}
+                              onChange={(e) => {
+                                const next = [...captures];
+                                next[idx] = { ...next[idx], selector: e.target.value };
+                                setCaptures(next);
+                              }}
+                            />
+                          ) : (
+                            <div className="text-xs text-muted">Selector not required</div>
+                          )}
                           <Checkbox
                             id={`cap-fullpage-${idx}`}
                             labelText="Full page"

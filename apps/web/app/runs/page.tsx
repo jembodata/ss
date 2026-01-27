@@ -33,16 +33,27 @@ function RunsContent() {
 
   useEffect(() => {
     if (runId) {
-      api.runs
-        .get(runId)
-        .then((data) => {
-          setDetail(data);
-          setStatus("");
-        })
-        .catch(() => {
-          setStatus("Failed to load run.");
-          push("error", "Run failed", "Failed to load run.");
-        });
+      let active = true;
+      const load = () => {
+        api.runs
+          .get(runId)
+          .then((data) => {
+            if (!active) return;
+            setDetail(data);
+            setStatus("");
+          })
+          .catch(() => {
+            if (!active) return;
+            setStatus("Failed to load run.");
+            push("error", "Run failed", "Failed to load run.");
+          });
+      };
+      load();
+      const interval = setInterval(load, 4000);
+      return () => {
+        active = false;
+        clearInterval(interval);
+      };
       return;
     }
     api.runs
@@ -107,6 +118,17 @@ function RunsContent() {
             <p><strong>Status:</strong> {detail.run.status}</p>
             {detail.run.error && <p><strong>Error:</strong> {detail.run.error}</p>}
           </div>
+          {["queued", "running"].includes(detail.run.status) && (
+            <div className="mt-3 text-sm text-muted">
+              <span className="typing-dots">Processing</span>
+            </div>
+          )}
+          {detail.run.log_tail && (
+            <Tile className="mt-4">
+              <div className="text-sm font-semibold">Live progress</div>
+              <pre className="mt-2 whitespace-pre-wrap text-xs text-muted">{detail.run.log_tail}</pre>
+            </Tile>
+          )}
           <div className="mt-3">
             <Button kind="ghost" onClick={() => deleteRun(detail.run.id)}>Delete run</Button>
           </div>

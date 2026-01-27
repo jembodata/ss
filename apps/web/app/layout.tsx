@@ -13,7 +13,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <ToastProvider>
           <div className="page-shell min-h-screen">
-            <div className="mx-auto max-w-6xl px-6 py-10">{children}</div>
+            <div className="mx-auto max-w-6xl px-6 py-10 page-transition">{children}</div>
           </div>
         </ToastProvider>
       </body>

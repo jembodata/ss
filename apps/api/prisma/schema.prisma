@@ -11,6 +11,7 @@ model profiles {
   name       String @db.VarChar(255)
   config_json Json
   created_at String @db.VarChar(64)
+  jobs       jobs[]
 }
 
 model jobs {
@@ -19,6 +20,7 @@ model jobs {
   profile_id String @db.VarChar(191)
   config_json Json
   created_at String @db.VarChar(64)
+  profile    profiles @relation(fields: [profile_id], references: [id])
 }
 
 model schedules {
