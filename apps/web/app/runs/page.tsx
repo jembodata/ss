@@ -9,6 +9,7 @@ import AppHeader from "@/components/AppHeader";
 import { useToast } from "@/components/ToastProvider";
 import {
   Button,
+  Modal,
   Pagination,
   Table,
   TableBody,
@@ -30,6 +31,8 @@ function RunsContent() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const { push } = useToast();
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [confirmDeleteRun, setConfirmDeleteRun] = useState<string | null>(null);
 
   useEffect(() => {
     if (runId) {
@@ -82,7 +85,6 @@ function RunsContent() {
   }, []);
 
   async function deleteRun(id: string) {
-    if (!confirm("Delete run?")) return;
     try {
       await api.runs.remove(id);
       if (runId) {
@@ -93,6 +95,10 @@ function RunsContent() {
       setRuns(data);
       push("success", "Run deleted", id);
     } catch {}
+  }
+  function requestDelete(id: string) {
+    setConfirmDeleteRun(id);
+    setConfirmDeleteOpen(true);
   }
 
   const totalPages = Math.max(1, Math.ceil(runs.length / pageSize));
@@ -130,7 +136,7 @@ function RunsContent() {
             </Tile>
           )}
           <div className="mt-3">
-            <Button kind="ghost" onClick={() => deleteRun(detail.run.id)}>Delete run</Button>
+            <Button kind="ghost" onClick={() => requestDelete(detail.run.id)}>Delete run</Button>
           </div>
           <div className="mt-4 grid gap-4">
             {(detail.artifacts || []).map((a: any) => (
@@ -172,7 +178,7 @@ function RunsContent() {
                   <TableCell>
                     <div className="flex gap-2">
                       <Button size="sm" kind="ghost" href={`/runs?runId=${r.id}`}>View</Button>
-                      <Button size="sm" kind="ghost" onClick={() => deleteRun(r.id)}>Delete</Button>
+                      <Button size="sm" kind="ghost" onClick={() => requestDelete(r.id)}>Delete</Button>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -196,6 +202,26 @@ function RunsContent() {
           />
         </div>
       )}
+      <Modal
+        open={confirmDeleteOpen}
+        onRequestClose={() => setConfirmDeleteOpen(false)}
+        danger
+        modalHeading="Delete run?"
+        modalLabel="Runs"
+        primaryButtonText="Delete"
+        secondaryButtonText="Cancel"
+        onRequestSubmit={() => {
+          if (!confirmDeleteRun) return;
+          const id = confirmDeleteRun;
+          setConfirmDeleteOpen(false);
+          setConfirmDeleteRun(null);
+          deleteRun(id);
+        }}
+      >
+        <p>
+          This run and its artifacts will be permanently deleted.
+        </p>
+      </Modal>
     </div>
   );
 }

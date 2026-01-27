@@ -12,6 +12,7 @@ import {
   ModalBody,
   ModalFooter,
   ModalHeader,
+  Modal,
   Pagination,
   Select,
   SelectItem,
@@ -103,6 +104,8 @@ export default function JobsPage() {
   const { push } = useToast();
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [confirmDeleteJob, setConfirmDeleteJob] = useState<any | null>(null);
 
   useEffect(() => {
     refresh();
@@ -190,7 +193,6 @@ export default function JobsPage() {
   }
 
   async function deleteJob(jobId: string) {
-    if (!confirm("Delete job and all runs?")) return;
     setStatus("Deleting...");
     try {
       await api.jobs.remove(jobId);
@@ -201,6 +203,10 @@ export default function JobsPage() {
       setStatus(err.message || "Delete failed.");
       push("error", "Delete failed", err.message || "Delete failed.");
     }
+  }
+  function requestDelete(job: any) {
+    setConfirmDeleteJob(job);
+    setConfirmDeleteOpen(true);
   }
 
   function openEdit(job: any) {
@@ -324,7 +330,7 @@ export default function JobsPage() {
                         {enabled ? "Stop schedule" : "Start schedule"}
                       </Button>
                       <Button size="sm" kind="ghost" onClick={() => openEdit(job)}>Edit</Button>
-                      <Button size="sm" kind="ghost" onClick={() => deleteJob(job.id)}>Delete</Button>
+                      <Button size="sm" kind="ghost" onClick={() => requestDelete(job)}>Delete</Button>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -926,6 +932,27 @@ export default function JobsPage() {
           <Button kind="primary" onClick={saveEdit}>Save</Button>
         </ModalFooter>
       </ComposedModal>
+
+      <Modal
+        open={confirmDeleteOpen}
+        onRequestClose={() => setConfirmDeleteOpen(false)}
+        danger
+        modalHeading="Delete job?"
+        modalLabel="Jobs"
+        primaryButtonText="Delete"
+        secondaryButtonText="Cancel"
+        onRequestSubmit={() => {
+          if (!confirmDeleteJob) return;
+          const id = confirmDeleteJob.id;
+          setConfirmDeleteOpen(false);
+          setConfirmDeleteJob(null);
+          deleteJob(id);
+        }}
+      >
+        <p>
+          This will delete the job and all related runs and artifacts.
+        </p>
+      </Modal>
     </div>
   );
 }

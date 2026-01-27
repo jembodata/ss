@@ -9,6 +9,7 @@ import {
   Checkbox,
   ComposedModal,
   Form,
+  Modal,
   ModalBody,
   ModalFooter,
   ModalHeader,
@@ -75,6 +76,8 @@ export default function ProfilesPage() {
   });
   const [userAgentPreset, setUserAgentPreset] = useState("custom");
   const [customUserAgent, setCustomUserAgent] = useState("");
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [confirmDeleteProfile, setConfirmDeleteProfile] = useState<any | null>(null);
   const { push } = useToast();
 
   useEffect(() => {
@@ -147,7 +150,6 @@ export default function ProfilesPage() {
   }
 
   async function deleteProfile(id: string) {
-    if (!confirm("Delete profile and all related jobs?")) return;
     setStatus("Deleting...");
     try {
       await api.profiles.remove(id);
@@ -159,6 +161,10 @@ export default function ProfilesPage() {
       setStatus(err.message || "Delete failed.");
       push("error", "Delete failed", err.message || "Delete failed.");
     }
+  }
+  function requestDelete(profile: any) {
+    setConfirmDeleteProfile(profile);
+    setConfirmDeleteOpen(true);
   }
 
   const totalPages = Math.max(1, Math.ceil(profiles.length / pageSize));
@@ -195,7 +201,7 @@ export default function ProfilesPage() {
                 <TableCell>
                   <div className="flex gap-2">
                     <Button size="sm" kind="ghost" onClick={() => openEdit(p)}>Edit</Button>
-                    <Button size="sm" kind="ghost" onClick={() => deleteProfile(p.id)}>Delete</Button>
+                    <Button size="sm" kind="ghost" onClick={() => requestDelete(p)}>Delete</Button>
                   </div>
                 </TableCell>
               </TableRow>
@@ -379,6 +385,27 @@ export default function ProfilesPage() {
           <Button kind="primary" onClick={saveEdit}>Save Changes</Button>
         </ModalFooter>
       </ComposedModal>
+
+      <Modal
+        open={confirmDeleteOpen}
+        onRequestClose={() => setConfirmDeleteOpen(false)}
+        danger
+        modalHeading="Delete profile?"
+        modalLabel="Profiles"
+        primaryButtonText="Delete"
+        secondaryButtonText="Cancel"
+        onRequestSubmit={() => {
+          if (!confirmDeleteProfile) return;
+          const id = confirmDeleteProfile.id;
+          setConfirmDeleteOpen(false);
+          setConfirmDeleteProfile(null);
+          deleteProfile(id);
+        }}
+      >
+        <p>
+          This will delete the profile and all jobs that depend on it.
+        </p>
+      </Modal>
     </div>
   );
 }

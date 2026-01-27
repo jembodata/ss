@@ -9,6 +9,7 @@ import {
   Checkbox,
   ComposedModal,
   Form,
+  Modal,
   ModalBody,
   ModalFooter,
   ModalHeader,
@@ -44,6 +45,8 @@ export default function NotificationsPage() {
   const [pageSize, setPageSize] = useState(10);
   const { push } = useToast();
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [confirmDeleteNotification, setConfirmDeleteNotification] = useState<any | null>(null);
 
   useEffect(() => {
     loadNotifications();
@@ -104,7 +107,6 @@ export default function NotificationsPage() {
   }
 
   async function deleteNotification(id: string) {
-    if (!confirm("Delete notification?")) return;
     setStatus("Deleting...");
     try {
       await api.notifications.remove(id);
@@ -115,6 +117,10 @@ export default function NotificationsPage() {
       setStatus(err.message || "Delete failed.");
       push("error", "Delete failed", err.message || "Delete failed.");
     }
+  }
+  function requestDelete(notification: any) {
+    setConfirmDeleteNotification(notification);
+    setConfirmDeleteOpen(true);
   }
 
   async function testNotification(id: string) {
@@ -219,7 +225,7 @@ export default function NotificationsPage() {
                       <Button size="sm" kind="ghost" onClick={() => testNotification(n.id)}>
                         Test
                       </Button>
-                      <Button size="sm" kind="ghost" onClick={() => deleteNotification(n.id)}>
+                      <Button size="sm" kind="ghost" onClick={() => requestDelete(n)}>
                         Delete
                       </Button>
                     </div>
@@ -309,6 +315,27 @@ export default function NotificationsPage() {
           </Button>
         </ModalFooter>
       </ComposedModal>
+
+      <Modal
+        open={confirmDeleteOpen}
+        onRequestClose={() => setConfirmDeleteOpen(false)}
+        danger
+        modalHeading="Delete notification?"
+        modalLabel="Notifications"
+        primaryButtonText="Delete"
+        secondaryButtonText="Cancel"
+        onRequestSubmit={() => {
+          if (!confirmDeleteNotification) return;
+          const id = confirmDeleteNotification.id;
+          setConfirmDeleteOpen(false);
+          setConfirmDeleteNotification(null);
+          deleteNotification(id);
+        }}
+      >
+        <p>
+          This notification will be removed and cannot be used by jobs.
+        </p>
+      </Modal>
     </div>
   );
 }
