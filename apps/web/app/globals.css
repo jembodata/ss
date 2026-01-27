@@ -17,6 +17,21 @@ body {
   background: #fff;
 }
 
+.page-transition {
+  animation: pageFade 160ms ease-out;
+}
+
+@keyframes pageFade {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .modal-fixed .cds--modal-container {
   width: 72rem;
   max-width: 90vw;
@@ -43,13 +58,4 @@ body {
   50% { content: ".."; }
   75% { content: "..."; }
   100% { content: ""; }
-}
-
-@keyframes pageIn {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-.animate-page {
-  animation: pageIn 0.4s ease-out forwards;
 }
