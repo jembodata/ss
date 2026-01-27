@@ -1,0 +1,10 @@
+{
+  "name": "ssrururu",
+  "private": true,
+  "scripts": {
+    "install:all": "npm install --no-workspaces --prefix packages/shared && npm install --no-workspaces --prefix apps/api && npm install --no-workspaces --prefix apps/worker && npm install --no-workspaces --prefix apps/web",
+    "dev": "npm run dev --no-workspaces --prefix apps/web & npm run dev --no-workspaces --prefix apps/api & npm run dev --no-workspaces --prefix apps/worker",
+    "build": "npm run build --no-workspaces --prefix apps/web",
+    "start": "npm run start --no-workspaces --prefix apps/api"
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "startUrl": "https://example.com",
+  "login": {
+    "enabled": false,
+    "steps": [
+      { "type": "waitForLoadState", "state": "domcontentloaded" }
+    ]
+  },
+  "captures": [
+    { "name": "full-page", "phase": "preLogin", "mode": "page", "fullPage": true }
+  ],
+  "upload": {
+    "enabled": false,
+    "endpoint": "https://monitoring-api.local/upload",
+    "method": "POST",
+    "headers": {
+      "X-Job": "{{job.name}}",
+      "Authorization": "Bearer {{secret.apiToken}}"
+    },
+    "multipart": {
+      "fileField": "file",
+      "extraFields": {
+        "runId": "{{run.id}}",
+        "artifact": "{{artifact.name}}"
+      }
+    },
+    "timeoutMs": 20000,
+    "retry": { "max": 2, "backoffMs": 2000 }
+  }
+}

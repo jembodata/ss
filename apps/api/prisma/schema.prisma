@@ -1,0 +1,66 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+model profiles {
+  id         String @id @db.VarChar(191)
+  name       String @db.VarChar(255)
+  config_json Json
+  created_at String @db.VarChar(64)
+}
+
+model jobs {
+  id         String @id @db.VarChar(191)
+  name       String @db.VarChar(255)
+  profile_id String @db.VarChar(191)
+  config_json Json
+  created_at String @db.VarChar(64)
+}
+
+model schedules {
+  id             String @id @db.VarChar(191)
+  job_id         String @db.VarChar(191)
+  cron           String @db.VarChar(64)
+  timezone       String @db.VarChar(64)
+  enabled        Int
+  created_at     String @db.VarChar(64)
+  mode           String @db.VarChar(32)
+  remaining_runs Int?
+}
+
+model runs {
+  id           String @id @db.VarChar(191)
+  job_id       String @db.VarChar(191)
+  status       String @db.VarChar(32)
+  scheduled_at String @db.VarChar(64)
+  started_at   String? @db.VarChar(64)
+  ended_at     String? @db.VarChar(64)
+  error        String? @db.Text
+  log_tail     String? @db.Text
+}
+
+model artifacts {
+  id               String @id @db.VarChar(191)
+  run_id           String @db.VarChar(191)
+  name             String @db.VarChar(255)
+  phase            String @db.VarChar(32)
+  bucket           String @db.VarChar(255)
+  object_key       String @db.Text
+  size_bytes       BigInt
+  content_type     String @db.VarChar(128)
+  uploaded_external Int
+  external_status  Int?
+  created_at       String @db.VarChar(64)
+}
+
+model notifications {
+  id         String @id @db.VarChar(191)
+  name       String @db.VarChar(255)
+  type       String @db.VarChar(32)
+  config_json Json
+  created_at String @db.VarChar(64)
+}

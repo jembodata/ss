@@ -1,0 +1,28 @@
+FROM node:20-bullseye-slim AS deps
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 make g++ \
+  && rm -rf /var/lib/apt/lists/*
+
+COPY .npmrc package.json ./
+COPY packages/shared ./packages/shared
+COPY apps/api/package.json apps/api/package-lock.json apps/api/prisma.config.ts ./apps/api/
+COPY apps/api/prisma ./apps/api/prisma
+
+RUN npm install --omit=dev --prefix packages/shared
+RUN npm install --omit=dev --prefix apps/api
+RUN npx --prefix apps/api prisma generate --schema ./apps/api/prisma/schema.prisma
+
+FROM node:20-bullseye-slim AS runtime
+
+WORKDIR /app/apps/api
+ENV NODE_ENV=production
+
+COPY --from=deps /app/apps/api/node_modules ./node_modules
+COPY --from=deps /app/packages/shared/node_modules /app/packages/shared/node_modules
+COPY packages/shared /app/packages/shared
+COPY apps/api ./ 
+
+CMD ["node", "src/index.js"]

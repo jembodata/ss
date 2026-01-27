@@ -1,0 +1,29 @@
+@import "@carbon/styles/css/styles.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  @apply bg-white text-ink;
+  font-family: "IBM Plex Sans", "Space Grotesk", "Segoe UI", sans-serif;
+}
+
+.page-shell {
+  background: #fff;
+}
+
+.modal-fixed .cds--modal-container {
+  width: 72rem;
+  max-width: 90vw;
+  height: 80vh;
+  max-height: 80vh;
+}
+
+.modal-fixed .cds--modal-content {
+  overflow-y: auto;
+}

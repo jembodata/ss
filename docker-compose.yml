@@ -1,0 +1,102 @@
+services:
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minio
+      MINIO_ROOT_PASSWORD: minio_pass123
+    volumes:
+      - minio_data:/data
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/ready"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      until mc alias set local http://minio:9000 minio minio_pass123; do echo 'waiting for minio...'; sleep 2; done;
+      mc mb -p local/screenshots || true;
+      exit 0;
+      "
+
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.api
+    environment:
+      ROLE: api
+      PORT: "8081"
+      REDIS_URL: redis://redis:6379
+      DB_PROVIDER: mysql
+      DATABASE_URL: mysql://root:123456@192.168.10.40:3306/ssrururu
+      DATABASE_HOST: 192.168.10.40
+      DATABASE_PORT: "3306"
+      DATABASE_USER: root
+      DATABASE_PASSWORD: 123456
+      DATABASE_NAME: ssrururu
+
+      S3_ENDPOINT: http://minio:9000
+      S3_ACCESS_KEY: minio
+      S3_SECRET_KEY: minio_pass123
+      S3_BUCKET: screenshots
+      S3_REGION: us-east-1
+    depends_on:
+      - redis
+      - minio
+      - minio-init
+    volumes:
+      - api_data:/data
+    ports:
+      - "8081:8081"
+
+  worker:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.worker
+    environment:
+      ROLE: worker
+      REDIS_URL: redis://redis:6379
+      API_BASE_URL: http://api:8081
+
+      S3_ENDPOINT: http://minio:9000
+      S3_ACCESS_KEY: minio
+      S3_SECRET_KEY: minio_pass123
+      S3_BUCKET: screenshots
+      S3_REGION: us-east-1
+
+      WORKER_CONCURRENCY: "2"
+    depends_on:
+      - api
+      - redis
+      - minio
+    shm_size: "1gb"
+
+  web:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.web
+    environment:
+      ROLE: web
+      NEXT_PUBLIC_API_BASE: http://api:8081
+    depends_on:
+      - api
+    ports:
+      - "3000:3000"
+
+volumes:
+  api_data:
+  minio_data:

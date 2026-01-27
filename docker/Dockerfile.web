@@ -1,0 +1,29 @@
+FROM node:20-bullseye-slim AS deps
+
+WORKDIR /app
+
+COPY .npmrc package.json ./
+COPY apps/web/package.json apps/web/package-lock.json ./apps/web/
+
+RUN npm ci --prefix apps/web
+
+FROM node:20-bullseye-slim AS builder
+
+WORKDIR /app
+
+COPY --from=deps /app/apps/web/node_modules ./apps/web/node_modules
+COPY apps/web ./apps/web
+
+RUN npm run build --prefix apps/web
+
+FROM node:20-bullseye-slim AS runtime
+
+WORKDIR /app
+ENV NODE_ENV=production
+ENV PORT=3000
+
+COPY --from=builder /app/apps/web/.next/standalone ./
+COPY --from=builder /app/apps/web/.next/static ./.next/static
+RUN mkdir -p ./public
+
+CMD ["node", "server.js"]

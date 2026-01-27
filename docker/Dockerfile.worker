@@ -1,0 +1,15 @@
+FROM mcr.microsoft.com/playwright:v1.57.0-jammy
+
+WORKDIR /app
+
+COPY .npmrc package.json ./
+COPY apps/worker/package.json apps/worker/package-lock.json ./apps/worker/
+
+RUN npm ci --omit=dev --prefix apps/worker
+
+WORKDIR /app/apps/worker
+ENV NODE_ENV=production
+
+COPY apps/worker ./ 
+
+CMD ["node", "src/index.js"]
