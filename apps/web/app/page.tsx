@@ -51,6 +51,7 @@ const defaultJob = {
   navigationTimeoutMs: 45000,
   captureDelayMs: 10000,
   login: { enabled: false, steps: [] as any[] },
+  interaction: { enabled: false, steps: [] as any[], captureMode: "afterInteraction", bypassLazyLoad: false },
   postLoginSteps: [] as any[],
   captures: [{ name: "full-page", phase: "preLogin", mode: "page", fullPage: true }] as Capture[],
   upload: {
@@ -179,6 +180,18 @@ export default function Page() {
   const [loginStepSleepSeconds, setLoginStepSleepSeconds] = useState("1");
   const [loginStepTimeoutSeconds, setLoginStepTimeoutSeconds] = useState("30");
   const [loginStepStatus, setLoginStepStatus] = useState("");
+  const [interactionStepType, setInteractionStepType] = useState("click");
+  const [interactionStepSelector, setInteractionStepSelector] = useState("");
+  const [interactionStepValue, setInteractionStepValue] = useState("");
+  const [interactionStepKey, setInteractionStepKey] = useState("Enter");
+  const [interactionStepUrl, setInteractionStepUrl] = useState("");
+  const [interactionStepState, setInteractionStepState] = useState("domcontentloaded");
+  const [interactionStepSleepSeconds, setInteractionStepSleepSeconds] = useState("1");
+  const [interactionStepTimeoutSeconds, setInteractionStepTimeoutSeconds] = useState("30");
+  const [interactionScrollTo, setInteractionScrollTo] = useState("bottom");
+  const [interactionScrollSteps, setInteractionScrollSteps] = useState("6");
+  const [interactionScrollDelaySeconds, setInteractionScrollDelaySeconds] = useState("0.25");
+  const [interactionStepStatus, setInteractionStepStatus] = useState("");
   const [postStepType, setPostStepType] = useState("click");
   const [postStepSelector, setPostStepSelector] = useState("");
   const [postStepValue, setPostStepValue] = useState("");
@@ -270,7 +283,7 @@ export default function Page() {
   }
 
   const jobConfig = useMemo(() => ({ ...jobCfg, captures }), [jobCfg, captures]);
-  const jobSteps = ["Basics", "Login", "Captures & Schedule"];
+  const jobSteps = ["Basics", "Interaction", "Captures & Schedule"];
   const scheduleItems = runningSchedules.slice(
     (schedulePage - 1) * schedulePageSize,
     schedulePage * schedulePageSize
@@ -1025,6 +1038,312 @@ export default function Page() {
                   ) : (
                     <div className="mt-3 text-xs text-muted">Enable login to configure steps.</div>
                   )}
+                  <div className="mt-6 border-t border-slate-200 pt-4">
+                    <div className="text-sm font-semibold">Interaction (non-login)</div>
+                    <div className="text-xs text-muted">Run steps before capture without login.</div>
+                    <Checkbox
+                      id="interaction-enabled"
+                      className="mt-3"
+                      labelText="Enable interaction"
+                      checked={jobCfg.interaction?.enabled || false}
+                      onChange={(e) => {
+                        const enabled = (e.target as HTMLInputElement).checked;
+                        const hasPostLoginCapture = captures.some((c) => c.phase === "postLogin" || c.phase === "both");
+                        if (enabled && !hasPostLoginCapture) {
+                          setCaptures([
+                            ...captures,
+                            { name: "post-login", phase: "postLogin", mode: "page", fullPage: false }
+                          ]);
+                        }
+                        setJobCfg({
+                          ...jobCfg,
+                          interaction: {
+                            ...(jobCfg.interaction || { enabled: false, steps: [], captureMode: "afterInteraction", bypassLazyLoad: false }),
+                            enabled
+                          }
+                        });
+                      }}
+                    />
+                    {jobCfg.interaction?.enabled ? (
+                      <>
+                        <div className="mt-3 grid grid-cols-2 gap-3">
+                          <Select
+                            id="interaction-capture-mode"
+                            labelText="Capture mode"
+                            value={jobCfg.interaction?.captureMode || "afterInteraction"}
+                            onChange={(e) =>
+                              setJobCfg({
+                                ...jobCfg,
+                                interaction: {
+                                  ...(jobCfg.interaction || { enabled: true, steps: [] }),
+                                  captureMode: e.target.value
+                                }
+                              })
+                            }
+                          >
+                            <SelectItem value="afterInteraction" text="After interaction" />
+                            <SelectItem value="afterEachStep" text="After each step" />
+                          </Select>
+                          <Checkbox
+                            id="interaction-lazy-load"
+                            labelText="Bypass lazy-load (auto scroll)"
+                            checked={jobCfg.interaction?.bypassLazyLoad || false}
+                            onChange={(e) =>
+                              setJobCfg({
+                                ...jobCfg,
+                                interaction: {
+                                  ...(jobCfg.interaction || { enabled: true, steps: [] }),
+                                  bypassLazyLoad: (e.target as HTMLInputElement).checked
+                                }
+                              })
+                            }
+                          />
+                        </div>
+                        <div className="mt-4 text-xs text-muted">Interaction steps</div>
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          {(jobCfg.interaction?.steps || []).map((s: any, idx: number) => (
+                            <Tile key={`interaction-${idx}`} style={{ padding: "8px 12px" }}>
+                              <div className="text-xs text-muted">Step {idx + 1}</div>
+                              <div className="text-sm font-semibold">{s.type}</div>
+                              {s.selector && <div className="text-xs">{s.selector}</div>}
+                              {s.value && <div className="text-xs">value: {s.value}</div>}
+                              {s.key && <div className="text-xs">key: {s.key}</div>}
+                              {s.url && <div className="text-xs">url: {s.url}</div>}
+                              {s.state && <div className="text-xs">state: {s.state}</div>}
+                              {Number.isFinite(s.ms) && <div className="text-xs">sleep: {s.ms}ms</div>}
+                              {s.type === "scroll" && (
+                                <div className="text-xs">
+                                  scroll: {s.scrollTo || "bottom"}
+                                  {Number.isFinite(s.scrollSteps) ? `, steps ${s.scrollSteps}` : ""}
+                                </div>
+                              )}
+                              <Button
+                                kind="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  const next = [...(jobCfg.interaction?.steps || [])];
+                                  next.splice(idx, 1);
+                                  setJobCfg({
+                                    ...jobCfg,
+                                    interaction: {
+                                      ...(jobCfg.interaction || { enabled: true, steps: [] }),
+                                      steps: next
+                                    }
+                                  });
+                                }}
+                              >
+                                Remove
+                              </Button>
+                            </Tile>
+                          ))}
+                          {(!jobCfg.interaction?.steps || jobCfg.interaction.steps.length === 0) && (
+                            <div className="text-xs text-muted">No interaction steps.</div>
+                          )}
+                        </div>
+                        <div className="mt-4 border-t border-slate-200 pt-4">
+                          <div className="text-xs text-muted">Add interaction step</div>
+                          <div className="mt-2 grid grid-cols-2 gap-3">
+                            <Select
+                              id="interaction-step-type"
+                              labelText="Step type"
+                              value={interactionStepType}
+                              onChange={(e) => setInteractionStepType(e.target.value)}
+                            >
+                              <SelectItem value="click" text="click" />
+                              <SelectItem value="fill" text="fill" />
+                              <SelectItem value="type" text="type" />
+                              <SelectItem value="press" text="press" />
+                              <SelectItem value="waitForSelector" text="waitForSelector" />
+                              <SelectItem value="waitForURL" text="waitForURL" />
+                              <SelectItem value="waitForLoadState" text="waitForLoadState" />
+                              <SelectItem value="sleep" text="wait" />
+                              <SelectItem value="scroll" text="scroll" />
+                            </Select>
+                            <TextInput
+                              id="interaction-step-timeout"
+                              labelText="Timeout (seconds)"
+                              value={interactionStepTimeoutSeconds}
+                              onChange={(e) => setInteractionStepTimeoutSeconds(e.target.value)}
+                            />
+                          </div>
+                          {["click", "fill", "waitForSelector"].includes(interactionStepType) && (
+                            <TextInput
+                              id="interaction-step-selector"
+                              labelText="Selector"
+                              value={interactionStepSelector}
+                              onChange={(e) => setInteractionStepSelector(e.target.value)}
+                            />
+                          )}
+                          {interactionStepType === "fill" && (
+                            <TextInput
+                              id="interaction-step-value"
+                              labelText="Value"
+                              value={interactionStepValue}
+                              onChange={(e) => setInteractionStepValue(e.target.value)}
+                            />
+                          )}
+                          {interactionStepType === "type" && (
+                            <TextInput
+                              id="interaction-step-type-value"
+                              labelText="Text to type"
+                              value={interactionStepValue}
+                              onChange={(e) => setInteractionStepValue(e.target.value)}
+                            />
+                          )}
+                          {interactionStepType === "press" && (
+                            <TextInput
+                              id="interaction-step-key"
+                              labelText="Key (Enter, Tab, ArrowDown, etc.)"
+                              value={interactionStepKey}
+                              onChange={(e) => setInteractionStepKey(e.target.value)}
+                            />
+                          )}
+                          {interactionStepType === "press" && (
+                            <div className="text-xs text-muted">{pressKeyHint}</div>
+                          )}
+                          {interactionStepType === "waitForURL" && (
+                            <TextInput
+                              id="interaction-step-url"
+                              labelText="URL or pattern"
+                              value={interactionStepUrl}
+                              onChange={(e) => setInteractionStepUrl(e.target.value)}
+                            />
+                          )}
+                          {interactionStepType === "waitForLoadState" && (
+                            <Select
+                              id="interaction-step-state"
+                              labelText="Load state"
+                              value={interactionStepState}
+                              onChange={(e) => setInteractionStepState(e.target.value)}
+                            >
+                              <SelectItem value="domcontentloaded" text="domcontentloaded" />
+                              <SelectItem value="load" text="load" />
+                              <SelectItem value="networkidle" text="networkidle" />
+                            </Select>
+                          )}
+                          {interactionStepType === "sleep" && (
+                            <TextInput
+                              id="interaction-step-sleep"
+                              labelText="Wait (seconds)"
+                              value={interactionStepSleepSeconds}
+                              onChange={(e) => setInteractionStepSleepSeconds(e.target.value)}
+                            />
+                          )}
+                          {interactionStepType === "scroll" && (
+                            <div className="grid grid-cols-3 gap-3">
+                              <Select
+                                id="interaction-scroll-to"
+                                labelText="Scroll to"
+                                value={interactionScrollTo}
+                                onChange={(e) => setInteractionScrollTo(e.target.value)}
+                              >
+                                <SelectItem value="bottom" text="bottom" />
+                                <SelectItem value="top" text="top" />
+                                <SelectItem value="selector" text="selector" />
+                              </Select>
+                              <TextInput
+                                id="interaction-scroll-steps"
+                                labelText="Scroll steps"
+                                type="number"
+                                value={interactionScrollSteps}
+                                onChange={(e) => setInteractionScrollSteps(e.target.value)}
+                              />
+                              <TextInput
+                                id="interaction-scroll-delay"
+                                labelText="Delay per step (seconds)"
+                                value={interactionScrollDelaySeconds}
+                                onChange={(e) => setInteractionScrollDelaySeconds(e.target.value)}
+                              />
+                            </div>
+                          )}
+                          {interactionStepType === "scroll" && interactionScrollTo === "selector" && (
+                            <TextInput
+                              id="interaction-scroll-selector"
+                              labelText="Scroll selector"
+                              value={interactionStepSelector}
+                              onChange={(e) => setInteractionStepSelector(e.target.value)}
+                            />
+                          )}
+                          <div className="mt-3">
+                            <Button
+                              kind="secondary"
+                              onClick={() => {
+                                const step: any = { type: interactionStepType };
+                                const timeoutSec = Number(interactionStepTimeoutSeconds);
+                                if (Number.isFinite(timeoutSec) && timeoutSec > 0) {
+                                  step.timeoutMs = Math.round(timeoutSec * 1000);
+                                }
+                                if (interactionStepType === "click") {
+                                  if (!interactionStepSelector) return setInteractionStepStatus("Selector required for click.");
+                                  step.selector = interactionStepSelector;
+                                }
+                                if (interactionStepType === "fill") {
+                                  if (!interactionStepSelector) return setInteractionStepStatus("Selector required for fill.");
+                                  step.selector = interactionStepSelector;
+                                  step.value = interactionStepValue;
+                                }
+                                if (interactionStepType === "type") {
+                                  step.value = interactionStepValue;
+                                }
+                                if (interactionStepType === "press") {
+                                  step.key = interactionStepKey || "Enter";
+                                }
+                                if (interactionStepType === "waitForSelector") {
+                                  if (!interactionStepSelector) return setInteractionStepStatus("Selector required for waitForSelector.");
+                                  step.selector = interactionStepSelector;
+                                }
+                                if (interactionStepType === "waitForURL") {
+                                  if (!interactionStepUrl) return setInteractionStepStatus("URL required for waitForURL.");
+                                  step.url = interactionStepUrl;
+                                }
+                                if (interactionStepType === "waitForLoadState") {
+                                  step.state = interactionStepState || "domcontentloaded";
+                                }
+                                if (interactionStepType === "sleep") {
+                                  const sleepSec = Number(interactionStepSleepSeconds);
+                                  if (!Number.isFinite(sleepSec) || sleepSec < 0) {
+                                    return setInteractionStepStatus("Wait seconds must be >= 0.");
+                                  }
+                                  step.ms = Math.round(sleepSec * 1000);
+                                }
+                                if (interactionStepType === "scroll") {
+                                  step.scrollTo = interactionScrollTo || "bottom";
+                                  const steps = Number(interactionScrollSteps);
+                                  if (!Number.isFinite(steps) || steps < 1) {
+                                    return setInteractionStepStatus("Scroll steps must be >= 1.");
+                                  }
+                                  step.scrollSteps = Math.round(steps);
+                                  const delaySec = Number(interactionScrollDelaySeconds);
+                                  if (!Number.isFinite(delaySec) || delaySec < 0) {
+                                    return setInteractionStepStatus("Delay must be >= 0.");
+                                  }
+                                  step.scrollDelayMs = Math.round(delaySec * 1000);
+                                  if (interactionScrollTo === "selector") {
+                                    if (!interactionStepSelector) return setInteractionStepStatus("Selector required for scroll.");
+                                    step.selector = interactionStepSelector;
+                                  }
+                                }
+                                setInteractionStepStatus("");
+                                const next = [...(jobCfg.interaction?.steps || []), step];
+                                setJobCfg({
+                                  ...jobCfg,
+                                  interaction: {
+                                    ...(jobCfg.interaction || { enabled: true, steps: [] }),
+                                    steps: next
+                                  }
+                                });
+                              }}
+                            >
+                              Add interaction step
+                            </Button>
+                            {interactionStepStatus && <p className="mt-2 text-xs text-muted">{interactionStepStatus}</p>}
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="mt-2 text-xs text-muted">Enable interaction to add steps.</div>
+                    )}
+                  </div>
                 </Tile>
               )}
 

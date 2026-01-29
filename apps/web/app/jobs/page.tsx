@@ -92,6 +92,18 @@ export default function JobsPage() {
   const [editLoginStepSleepSeconds, setEditLoginStepSleepSeconds] = useState("1");
   const [editLoginStepTimeoutSeconds, setEditLoginStepTimeoutSeconds] = useState("30");
   const [editLoginStepStatus, setEditLoginStepStatus] = useState("");
+  const [editInteractionStepType, setEditInteractionStepType] = useState("click");
+  const [editInteractionStepSelector, setEditInteractionStepSelector] = useState("");
+  const [editInteractionStepValue, setEditInteractionStepValue] = useState("");
+  const [editInteractionStepKey, setEditInteractionStepKey] = useState("Enter");
+  const [editInteractionStepUrl, setEditInteractionStepUrl] = useState("");
+  const [editInteractionStepState, setEditInteractionStepState] = useState("domcontentloaded");
+  const [editInteractionStepSleepSeconds, setEditInteractionStepSleepSeconds] = useState("1");
+  const [editInteractionStepTimeoutSeconds, setEditInteractionStepTimeoutSeconds] = useState("30");
+  const [editInteractionScrollTo, setEditInteractionScrollTo] = useState("bottom");
+  const [editInteractionScrollSteps, setEditInteractionScrollSteps] = useState("6");
+  const [editInteractionScrollDelaySeconds, setEditInteractionScrollDelaySeconds] = useState("0.25");
+  const [editInteractionStepStatus, setEditInteractionStepStatus] = useState("");
   const [editPostStepType, setEditPostStepType] = useState("click");
   const [editPostStepSelector, setEditPostStepSelector] = useState("");
   const [editPostStepValue, setEditPostStepValue] = useState("");
@@ -221,6 +233,12 @@ export default function JobsPage() {
       login: {
         enabled: !!cfg.login?.enabled,
         steps: Array.isArray(cfg.login?.steps) ? cfg.login.steps : []
+      },
+      interaction: {
+        enabled: !!cfg.interaction?.enabled,
+        steps: Array.isArray(cfg.interaction?.steps) ? cfg.interaction.steps : [],
+        captureMode: cfg.interaction?.captureMode || "afterInteraction",
+        bypassLazyLoad: !!cfg.interaction?.bypassLazyLoad
       },
       postLoginSteps: Array.isArray(cfg.postLoginSteps) ? cfg.postLoginSteps : [],
       captures: Array.isArray(cfg.captures) ? cfg.captures : [],
@@ -403,6 +421,7 @@ export default function JobsPage() {
                 />
               </div>
               <Tile className="rounded-lg border border-slate-200 p-4">
+                <div className="text-sm font-semibold">Interaction</div>
                 <Checkbox
                   id="edit-login-enabled"
                   labelText="Enable login"
@@ -597,6 +616,314 @@ export default function JobsPage() {
                 ) : (
                   <div className="mt-3 text-xs text-muted">Enable login to configure steps.</div>
                 )}
+                <div className="mt-6 border-t border-slate-200 pt-4">
+                  <div className="text-sm font-semibold">Interaction (non-login)</div>
+                  <div className="text-xs text-muted">Run steps before capture without login.</div>
+                  <Checkbox
+                    id="edit-interaction-enabled"
+                    className="mt-3"
+                    labelText="Enable interaction"
+                    checked={editJobCfg.interaction?.enabled || false}
+                    onChange={(e) => {
+                      const enabled = (e.target as HTMLInputElement).checked;
+                      const hasPostLoginCapture = editCaptures.some(
+                        (c) => c.phase === "postLogin" || c.phase === "both"
+                      );
+                      if (enabled && !hasPostLoginCapture) {
+                        setEditCaptures([
+                          ...editCaptures,
+                          { name: "post-login", phase: "postLogin", mode: "page", fullPage: false }
+                        ]);
+                      }
+                      setEditJobCfg({
+                        ...editJobCfg,
+                        interaction: {
+                          ...(editJobCfg.interaction || { enabled: false, steps: [], captureMode: "afterInteraction", bypassLazyLoad: false }),
+                          enabled
+                        }
+                      });
+                    }}
+                  />
+                  {editJobCfg.interaction?.enabled ? (
+                    <>
+                      <div className="mt-3 grid grid-cols-2 gap-3">
+                        <Select
+                          id="edit-interaction-capture-mode"
+                          labelText="Capture mode"
+                          value={editJobCfg.interaction?.captureMode || "afterInteraction"}
+                          onChange={(e) =>
+                            setEditJobCfg({
+                              ...editJobCfg,
+                              interaction: {
+                                ...(editJobCfg.interaction || { enabled: true, steps: [] }),
+                                captureMode: e.target.value
+                              }
+                            })
+                          }
+                        >
+                          <SelectItem value="afterInteraction" text="After interaction" />
+                          <SelectItem value="afterEachStep" text="After each step" />
+                        </Select>
+                        <Checkbox
+                          id="edit-interaction-lazy-load"
+                          labelText="Bypass lazy-load (auto scroll)"
+                          checked={editJobCfg.interaction?.bypassLazyLoad || false}
+                          onChange={(e) =>
+                            setEditJobCfg({
+                              ...editJobCfg,
+                              interaction: {
+                                ...(editJobCfg.interaction || { enabled: true, steps: [] }),
+                                bypassLazyLoad: (e.target as HTMLInputElement).checked
+                              }
+                            })
+                          }
+                        />
+                      </div>
+                      <div className="mt-4 text-xs text-muted">Interaction steps</div>
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        {(editJobCfg.interaction?.steps || []).map((s: any, idx: number) => (
+                          <Tile key={`edit-interaction-${idx}`} style={{ padding: "8px 12px" }}>
+                            <div className="text-xs text-muted">Step {idx + 1}</div>
+                            <div className="text-sm font-semibold">{s.type}</div>
+                            {s.selector && <div className="text-xs">{s.selector}</div>}
+                            {s.value && <div className="text-xs">value: {s.value}</div>}
+                            {s.key && <div className="text-xs">key: {s.key}</div>}
+                            {s.url && <div className="text-xs">url: {s.url}</div>}
+                            {s.state && <div className="text-xs">state: {s.state}</div>}
+                            {Number.isFinite(s.ms) && <div className="text-xs">sleep: {s.ms}ms</div>}
+                            {s.type === "scroll" && (
+                              <div className="text-xs">
+                                scroll: {s.scrollTo || "bottom"}
+                                {Number.isFinite(s.scrollSteps) ? `, steps ${s.scrollSteps}` : ""}
+                              </div>
+                            )}
+                            <Button
+                              kind="ghost"
+                              size="sm"
+                              onClick={() => {
+                                const next = [...(editJobCfg.interaction?.steps || [])];
+                                next.splice(idx, 1);
+                                setEditJobCfg({
+                                  ...editJobCfg,
+                                  interaction: {
+                                    ...(editJobCfg.interaction || { enabled: true, steps: [] }),
+                                    steps: next
+                                  }
+                                });
+                              }}
+                            >
+                              Remove
+                            </Button>
+                          </Tile>
+                        ))}
+                        {(!editJobCfg.interaction?.steps || editJobCfg.interaction.steps.length === 0) && (
+                          <div className="text-xs text-muted">No interaction steps.</div>
+                        )}
+                      </div>
+                      <div className="mt-4 border-t border-slate-200 pt-4">
+                        <div className="text-xs text-muted">Add interaction step</div>
+                        <div className="mt-2 grid grid-cols-2 gap-3">
+                          <Select
+                            id="edit-interaction-step-type"
+                            labelText="Step type"
+                            value={editInteractionStepType}
+                            onChange={(e) => setEditInteractionStepType(e.target.value)}
+                          >
+                            <SelectItem value="click" text="click" />
+                            <SelectItem value="fill" text="fill" />
+                            <SelectItem value="type" text="type" />
+                            <SelectItem value="press" text="press" />
+                            <SelectItem value="waitForSelector" text="waitForSelector" />
+                            <SelectItem value="waitForURL" text="waitForURL" />
+                            <SelectItem value="waitForLoadState" text="waitForLoadState" />
+                            <SelectItem value="sleep" text="wait" />
+                            <SelectItem value="scroll" text="scroll" />
+                          </Select>
+                          <TextInput
+                            id="edit-interaction-step-timeout"
+                            labelText="Timeout (seconds)"
+                            value={editInteractionStepTimeoutSeconds}
+                            onChange={(e) => setEditInteractionStepTimeoutSeconds(e.target.value)}
+                          />
+                        </div>
+                        {["click", "fill", "waitForSelector"].includes(editInteractionStepType) && (
+                          <TextInput
+                            id="edit-interaction-step-selector"
+                            labelText="Selector"
+                            value={editInteractionStepSelector}
+                            onChange={(e) => setEditInteractionStepSelector(e.target.value)}
+                          />
+                        )}
+                        {editInteractionStepType === "fill" && (
+                          <TextInput
+                            id="edit-interaction-step-value"
+                            labelText="Value"
+                            value={editInteractionStepValue}
+                            onChange={(e) => setEditInteractionStepValue(e.target.value)}
+                          />
+                        )}
+                        {editInteractionStepType === "type" && (
+                          <TextInput
+                            id="edit-interaction-step-type-value"
+                            labelText="Text to type"
+                            value={editInteractionStepValue}
+                            onChange={(e) => setEditInteractionStepValue(e.target.value)}
+                          />
+                        )}
+                        {editInteractionStepType === "press" && (
+                          <TextInput
+                            id="edit-interaction-step-key"
+                            labelText="Key (Enter, Tab, ArrowDown, etc.)"
+                            value={editInteractionStepKey}
+                            onChange={(e) => setEditInteractionStepKey(e.target.value)}
+                          />
+                        )}
+                        {editInteractionStepType === "press" && (
+                          <div className="text-xs text-muted">{pressKeyHint}</div>
+                        )}
+                        {editInteractionStepType === "waitForURL" && (
+                          <TextInput
+                            id="edit-interaction-step-url"
+                            labelText="URL or pattern"
+                            value={editInteractionStepUrl}
+                            onChange={(e) => setEditInteractionStepUrl(e.target.value)}
+                          />
+                        )}
+                        {editInteractionStepType === "waitForLoadState" && (
+                          <Select
+                            id="edit-interaction-step-state"
+                            labelText="Load state"
+                            value={editInteractionStepState}
+                            onChange={(e) => setEditInteractionStepState(e.target.value)}
+                          >
+                            <SelectItem value="domcontentloaded" text="domcontentloaded" />
+                            <SelectItem value="load" text="load" />
+                            <SelectItem value="networkidle" text="networkidle" />
+                          </Select>
+                        )}
+                        {editInteractionStepType === "sleep" && (
+                          <TextInput
+                            id="edit-interaction-step-sleep"
+                            labelText="Wait (seconds)"
+                            value={editInteractionStepSleepSeconds}
+                            onChange={(e) => setEditInteractionStepSleepSeconds(e.target.value)}
+                          />
+                        )}
+                        {editInteractionStepType === "scroll" && (
+                          <div className="grid grid-cols-3 gap-3">
+                            <Select
+                              id="edit-interaction-scroll-to"
+                              labelText="Scroll to"
+                              value={editInteractionScrollTo}
+                              onChange={(e) => setEditInteractionScrollTo(e.target.value)}
+                            >
+                              <SelectItem value="bottom" text="bottom" />
+                              <SelectItem value="top" text="top" />
+                              <SelectItem value="selector" text="selector" />
+                            </Select>
+                            <TextInput
+                              id="edit-interaction-scroll-steps"
+                              labelText="Scroll steps"
+                              type="number"
+                              value={editInteractionScrollSteps}
+                              onChange={(e) => setEditInteractionScrollSteps(e.target.value)}
+                            />
+                            <TextInput
+                              id="edit-interaction-scroll-delay"
+                              labelText="Delay per step (seconds)"
+                              value={editInteractionScrollDelaySeconds}
+                              onChange={(e) => setEditInteractionScrollDelaySeconds(e.target.value)}
+                            />
+                          </div>
+                        )}
+                        {editInteractionStepType === "scroll" && editInteractionScrollTo === "selector" && (
+                          <TextInput
+                            id="edit-interaction-scroll-selector"
+                            labelText="Scroll selector"
+                            value={editInteractionStepSelector}
+                            onChange={(e) => setEditInteractionStepSelector(e.target.value)}
+                          />
+                        )}
+                        <div className="mt-3">
+                          <Button
+                            kind="secondary"
+                            onClick={() => {
+                              const step: any = { type: editInteractionStepType };
+                              const timeoutSec = Number(editInteractionStepTimeoutSeconds);
+                              if (Number.isFinite(timeoutSec) && timeoutSec > 0) {
+                                step.timeoutMs = Math.round(timeoutSec * 1000);
+                              }
+                              if (editInteractionStepType === "click") {
+                                if (!editInteractionStepSelector) return setEditInteractionStepStatus("Selector required for click.");
+                                step.selector = editInteractionStepSelector;
+                              }
+                              if (editInteractionStepType === "fill") {
+                                if (!editInteractionStepSelector) return setEditInteractionStepStatus("Selector required for fill.");
+                                step.selector = editInteractionStepSelector;
+                                step.value = editInteractionStepValue;
+                              }
+                              if (editInteractionStepType === "type") {
+                                step.value = editInteractionStepValue;
+                              }
+                              if (editInteractionStepType === "press") {
+                                step.key = editInteractionStepKey || "Enter";
+                              }
+                              if (editInteractionStepType === "waitForSelector") {
+                                if (!editInteractionStepSelector) return setEditInteractionStepStatus("Selector required for waitForSelector.");
+                                step.selector = editInteractionStepSelector;
+                              }
+                              if (editInteractionStepType === "waitForURL") {
+                                if (!editInteractionStepUrl) return setEditInteractionStepStatus("URL required for waitForURL.");
+                                step.url = editInteractionStepUrl;
+                              }
+                              if (editInteractionStepType === "waitForLoadState") {
+                                step.state = editInteractionStepState || "domcontentloaded";
+                              }
+                              if (editInteractionStepType === "sleep") {
+                                const sleepSec = Number(editInteractionStepSleepSeconds);
+                                if (!Number.isFinite(sleepSec) || sleepSec < 0) {
+                                  return setEditInteractionStepStatus("Wait seconds must be >= 0.");
+                                }
+                                step.ms = Math.round(sleepSec * 1000);
+                              }
+                              if (editInteractionStepType === "scroll") {
+                                step.scrollTo = editInteractionScrollTo || "bottom";
+                                const steps = Number(editInteractionScrollSteps);
+                                if (!Number.isFinite(steps) || steps < 1) {
+                                  return setEditInteractionStepStatus("Scroll steps must be >= 1.");
+                                }
+                                step.scrollSteps = Math.round(steps);
+                                const delaySec = Number(editInteractionScrollDelaySeconds);
+                                if (!Number.isFinite(delaySec) || delaySec < 0) {
+                                  return setEditInteractionStepStatus("Delay must be >= 0.");
+                                }
+                                step.scrollDelayMs = Math.round(delaySec * 1000);
+                                if (editInteractionScrollTo === "selector") {
+                                  if (!editInteractionStepSelector) return setEditInteractionStepStatus("Selector required for scroll.");
+                                  step.selector = editInteractionStepSelector;
+                                }
+                              }
+                              setEditInteractionStepStatus("");
+                              const next = [...(editJobCfg.interaction?.steps || []), step];
+                              setEditJobCfg({
+                                ...editJobCfg,
+                                interaction: {
+                                  ...(editJobCfg.interaction || { enabled: true, steps: [] }),
+                                  steps: next
+                                }
+                              });
+                            }}
+                          >
+                            Add interaction step
+                          </Button>
+                          {editInteractionStepStatus && <p className="mt-2 text-xs text-muted">{editInteractionStepStatus}</p>}
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="mt-2 text-xs text-muted">Enable interaction to add steps.</div>
+                  )}
+                </div>
               </Tile>
               <Tile className="rounded-lg border border-slate-200 p-4">
                 <div className="text-xs text-muted">Post-login steps (after login, before capture)</div>

@@ -21,7 +21,8 @@ export const StepSchema = z.object({
     "fill",
     "type",
     "press",
-    "sleep"
+    "sleep",
+    "scroll"
   ]),
   selector: z.string().optional(),
   value: z.string().optional(),
@@ -29,7 +30,10 @@ export const StepSchema = z.object({
   state: z.enum(["load", "domcontentloaded", "networkidle"]).optional(),
   url: z.string().optional(),
   timeoutMs: z.number().int().optional(),
-  ms: z.number().int().optional()
+  ms: z.number().int().optional(),
+  scrollTo: z.enum(["top", "bottom", "selector"]).optional(),
+  scrollSteps: z.number().int().min(1).max(50).optional(),
+  scrollDelayMs: z.number().int().min(0).max(30000).optional()
 });
 
 export const CaptureSchema = z.object({
@@ -91,6 +95,14 @@ export const JobConfigSchema = z.object({
       steps: z.array(StepSchema).default([])
     })
     .default({ enabled: false, steps: [] }),
+  interaction: z
+    .object({
+      enabled: z.boolean().default(false),
+      steps: z.array(StepSchema).default([]),
+      captureMode: z.enum(["afterInteraction", "afterEachStep"]).default("afterInteraction"),
+      bypassLazyLoad: z.boolean().default(false)
+    })
+    .default({ enabled: false, steps: [], captureMode: "afterInteraction", bypassLazyLoad: false }),
   postLoginSteps: z.array(StepSchema).default([]),
   captures: z.array(CaptureSchema).default([]),
   upload: UploadSchema.default({

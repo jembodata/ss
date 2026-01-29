@@ -63,6 +63,9 @@ export async function runJob({ apiBase, s3, payload, log }) {
 
   const captureOne = async (capture, phase) => {
     const name = capture.name || `${phase}-${capture.mode}`;
+    if (jobCfg.interaction?.bypassLazyLoad) {
+      await autoScrollForLazyLoad(page, apiBase, runId, log);
+    }
     if (captureDelay > 0) {
       const seconds = Math.max(0, Math.round(captureDelay / 1000));
       const msg = `wait ${seconds}s`;
@@ -132,24 +135,43 @@ export async function runJob({ apiBase, s3, payload, log }) {
     }
 
     const postLoginSteps = Array.isArray(jobCfg.postLoginSteps) ? jobCfg.postLoginSteps : [];
-    const postLoginCaptures = (jobCfg.captures || []).filter(c => c.phase === "postLogin" || c.phase === "both");
-    if (postLoginSteps.length > 0) {
-      for (let i = 0; i < postLoginSteps.length; i++) {
-        await runSingleStep(page, postLoginSteps[i], i, postLoginSteps.length, secrets, apiBase, runId, log);
-        if (postLoginCaptures[i]) {
-          await captureOne(postLoginCaptures[i], "postLogin");
+    const interaction = jobCfg.interaction || { enabled: false, steps: [], captureMode: "afterInteraction" };
+    const interactionSteps = Array.isArray(interaction.steps) ? interaction.steps : [];
+    const interactionMode = interaction.captureMode || "afterInteraction";
+
+    if (!jobCfg.login?.enabled && interaction.enabled && interactionSteps.length > 0) {
+      for (let i = 0; i < interactionSteps.length; i++) {
+        await runSingleStep(page, interactionSteps[i], i, interactionSteps.length, secrets, apiBase, runId, log);
+        if (interactionMode === "afterEachStep") {
+          await capturePhase("postLogin");
         }
       }
-      if (postLoginCaptures.length > postLoginSteps.length) {
-        for (let i = postLoginSteps.length; i < postLoginCaptures.length; i++) {
-          await captureOne(postLoginCaptures[i], "postLogin");
-        }
+      await postProgress(apiBase, runId, `Interaction steps complete`);
+      if (interactionMode === "afterInteraction" && hasPostLogin) {
+        await postProgress(apiBase, runId, `Waiting ${captureDelay}ms before postLogin capture`);
+        await waitForCaptureDelay();
+        await capturePhase("postLogin");
       }
-      await postProgress(apiBase, runId, `Post-login steps complete`);
-    } else if (hasPostLogin) {
-      await postProgress(apiBase, runId, `Waiting ${captureDelay}ms before postLogin capture`);
-      await waitForCaptureDelay();
-      await capturePhase("postLogin");
+    } else {
+      const postLoginCaptures = (jobCfg.captures || []).filter(c => c.phase === "postLogin" || c.phase === "both");
+      if (postLoginSteps.length > 0) {
+        for (let i = 0; i < postLoginSteps.length; i++) {
+          await runSingleStep(page, postLoginSteps[i], i, postLoginSteps.length, secrets, apiBase, runId, log);
+          if (postLoginCaptures[i]) {
+            await captureOne(postLoginCaptures[i], "postLogin");
+          }
+        }
+        if (postLoginCaptures.length > postLoginSteps.length) {
+          for (let i = postLoginSteps.length; i < postLoginCaptures.length; i++) {
+            await captureOne(postLoginCaptures[i], "postLogin");
+          }
+        }
+        await postProgress(apiBase, runId, `Post-login steps complete`);
+      } else if (hasPostLogin) {
+        await postProgress(apiBase, runId, `Waiting ${captureDelay}ms before postLogin capture`);
+        await waitForCaptureDelay();
+        await capturePhase("postLogin");
+      }
     }
 
     await browser.close();
@@ -388,9 +410,44 @@ async function runSingleStep(page, step, index, total, secrets, apiBase, runId, 
     case "sleep":
       await page.waitForTimeout(step.ms ?? 500);
       break;
+    case "scroll":
+      await runScrollStep(page, step, timeout);
+      break;
     default:
       throw new Error(`Unknown step type: ${step.type}`);
   }
+}
+
+async function runScrollStep(page, step, timeout) {
+  const target = step.scrollTo || "bottom";
+  const delayMs = Number.isFinite(step.scrollDelayMs) ? step.scrollDelayMs : 250;
+  const steps = Number.isFinite(step.scrollSteps) ? Math.max(1, step.scrollSteps) : 6;
+  if (target === "selector") {
+    if (!step.selector) throw new Error("scroll selector required");
+    const locator = page.locator(step.selector);
+    await locator.waitFor({ state: "visible", timeout });
+    await locator.scrollIntoViewIfNeeded();
+    return;
+  }
+  if (target === "top") {
+    await page.evaluate(() => window.scrollTo(0, 0));
+    return;
+  }
+  for (let i = 0; i < steps; i++) {
+    await page.evaluate(() => window.scrollBy(0, window.innerHeight));
+    if (delayMs > 0) await page.waitForTimeout(delayMs);
+  }
+}
+
+async function autoScrollForLazyLoad(page, apiBase, runId, log) {
+  const msg = "lazy-load scroll";
+  log(msg);
+  await postProgress(apiBase, runId, msg);
+  for (let i = 0; i < 6; i++) {
+    await page.evaluate(() => window.scrollBy(0, window.innerHeight));
+    await page.waitForTimeout(250);
+  }
+  await page.evaluate(() => window.scrollTo(0, 0));
 }
 function resolveValue(v, secrets) {
   if (typeof v !== "string") return "";
