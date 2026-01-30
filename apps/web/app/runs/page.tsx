@@ -2,13 +2,14 @@
 
 export const dynamic = "force-dynamic";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { api, API_BASE } from "@/lib/api";
 import AppHeader from "@/components/AppHeader";
 import { useToast } from "@/components/ToastProvider";
 import {
   Button,
+  ProgressBar,
   Modal,
   Pagination,
   Table,
@@ -110,6 +111,36 @@ function RunsContent() {
     const pad = (n: number) => String(n).padStart(2, "0");
     return `${d.getFullYear()}/${pad(d.getMonth() + 1)}/${pad(d.getDate())} - ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
   };
+  const progressInfo = useMemo(() => {
+    if (!detail?.run?.log_tail) return null;
+    const lines = String(detail.run.log_tail)
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean);
+    let current: number | null = null;
+    let total: number | null = null;
+    for (const line of lines) {
+      const match = line.match(/step\s+(\d+)\s*\/\s*(\d+)/i);
+      if (match) {
+        current = Number(match[1]);
+        total = Number(match[2]);
+      }
+    }
+    if (total && current != null) {
+      return {
+        value: Math.min(current, total),
+        max: total,
+        helperText: `${current} of ${total} steps`
+      };
+    }
+    const fallbackMax = 100;
+    const value = Math.min(lines.length, fallbackMax);
+    return {
+      value,
+      max: fallbackMax,
+      helperText: `${lines.length} events`
+    };
+  }, [detail?.run?.log_tail]);
 
 
   return (
@@ -129,10 +160,22 @@ function RunsContent() {
               <span className="typing-dots">Processing</span>
             </div>
           )}
-          {detail.run.log_tail && (
+          {detail.run.log_tail && progressInfo && (
             <Tile className="mt-4">
               <div className="text-sm font-semibold">Live progress</div>
-              <pre className="mt-2 whitespace-pre-wrap text-xs text-muted">{detail.run.log_tail}</pre>
+              <div className="mt-3">
+                <ProgressBar
+                  value={progressInfo.value}
+                  max={progressInfo.max}
+                  status={detail.run.status === "success" ? "finished" : "active"}
+                  label="Run progress"
+                  helperText={
+                    detail.run.status === "failed"
+                      ? "Failed"
+                      : progressInfo.helperText
+                  }
+                />
+              </div>
             </Tile>
           )}
           <div className="mt-3">

@@ -9,6 +9,7 @@ import {
   Checkbox,
   ComposedModal,
   Form,
+  MultiSelect,
   Pagination,
   ModalBody,
   ModalFooter,
@@ -1446,51 +1447,33 @@ export default function Page() {
                     </div>
                   </Tile>
                   <Tile className="rounded-lg border border-slate-200 p-4">
-                    <Checkbox
-                      id="notifications-enabled"
-                      labelText="Enable notifications"
-                      checked={jobCfg.notifications?.enabled || false}
-                      onChange={(e) =>
-                        setJobCfg({
-                          ...jobCfg,
-                          notifications: {
-                            ...(jobCfg.notifications || { enabled: false, ids: [] }),
-                            enabled: (e.target as HTMLInputElement).checked
-                          }
-                        })
-                      }
-                    />
-                    {jobCfg.notifications?.enabled ? (
-                      <div className="mt-3 space-y-2">
-                        {notifications.map((n) => {
-                          const checked = (jobCfg.notifications?.ids || []).includes(n.id);
-                          return (
-                            <Checkbox
-                              key={n.id}
-                              id={`notification-${n.id}`}
-                              labelText={`${n.name} (${n.config?.endpoint || "HTTP"})`}
-                              checked={checked}
-                              onChange={(e) => {
-                                const enabled = (e.target as HTMLInputElement).checked;
-                                const current = jobCfg.notifications?.ids || [];
-                                const next = enabled ? [...current, n.id] : current.filter((id) => id !== n.id);
-                                setJobCfg({
-                                  ...jobCfg,
-                                  notifications: {
-                                    enabled: true,
-                                    ids: next
-                                  }
-                                });
-                              }}
-                            />
-                          );
-                        })}
-                        {notifications.length === 0 && (
-                          <div className="text-xs text-muted">No notifications yet.</div>
+                    <div className="text-xs text-muted">Notifications</div>
+                    <div className="mt-2">
+                      <MultiSelect
+                        id="notifications-select"
+                        titleText="Enable notifications"
+                        items={notifications}
+                        itemToString={(item) =>
+                          item ? `${item.name || item.id} (${item.config?.endpoint || "HTTP"})` : ""
+                        }
+                        selectedItems={notifications.filter((n) =>
+                          (jobCfg.notifications?.ids || []).includes(n.id)
                         )}
-                      </div>
-                    ) : (
-                      <div className="mt-2 text-xs text-muted">Enable notifications to select recipients.</div>
+                        onChange={(e: any) => {
+                          const ids = (e.selectedItems || []).map((n: any) => n.id);
+                          setJobCfg({
+                            ...jobCfg,
+                            notifications: {
+                              enabled: ids.length > 0,
+                              ids
+                            }
+                          });
+                        }}
+                        label="Select notifications"
+                      />
+                    </div>
+                    {notifications.length === 0 && (
+                      <div className="mt-2 text-xs text-muted">No notifications yet.</div>
                     )}
                   </Tile>
                 </Stack>

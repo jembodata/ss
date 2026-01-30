@@ -9,6 +9,8 @@ import {
   Checkbox,
   ComposedModal,
   Form,
+  InlineLoading,
+  MultiSelect,
   ModalBody,
   ModalFooter,
   ModalHeader,
@@ -118,6 +120,7 @@ export default function JobsPage() {
   const [pageSize, setPageSize] = useState(10);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [confirmDeleteJob, setConfirmDeleteJob] = useState<any | null>(null);
+  const [manualRunLoading, setManualRunLoading] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     refresh();
@@ -181,6 +184,7 @@ export default function JobsPage() {
 
   async function runNow(jobId: string) {
     setStatus("Queueing run...");
+    setManualRunLoading((prev) => ({ ...prev, [jobId]: true }));
     try {
       await api.jobs.runNow(jobId);
       setStatus("Run queued.");
@@ -188,6 +192,8 @@ export default function JobsPage() {
     } catch (err: any) {
       setStatus(err.message || "Failed to run.");
       push("error", "Run failed", err.message || "Failed to run.");
+    } finally {
+      setManualRunLoading((prev) => ({ ...prev, [jobId]: false }));
     }
   }
 
@@ -330,11 +336,13 @@ export default function JobsPage() {
             {pageItems.map((job) => {
               const sched = scheduleMap[job.id] || [];
               const enabled = sched.some((s) => s.enabled === 1);
+              const isManualLoading = !!manualRunLoading[job.id];
+              const isRunning = running.has(job.id);
               return (
                 <TableRow key={job.id}>
                   <TableCell>
-                    <Tag type={running.has(job.id) ? "green" : "red"}>
-                      {running.has(job.id) ? "Running" : "Idle"}
+                    <Tag type={isRunning ? "green" : "red"}>
+                      {isRunning ? "Running" : "Idle"}
                     </Tag>
                   </TableCell>
                   <TableCell>{job.name}</TableCell>
@@ -343,7 +351,20 @@ export default function JobsPage() {
                   <TableCell>{sched.length ? sched.map((s) => `${cronToTime(s.cron)} (${s.mode})`).join(", ") : "-"}</TableCell>
                   <TableCell>
                     <div className="flex flex-wrap gap-2">
-                      <Button size="sm" kind="secondary" onClick={() => runNow(job.id)}>Manual run</Button>
+                      <Button
+                        size="sm"
+                        kind="secondary"
+                        onClick={() => runNow(job.id)}
+                        disabled={isManualLoading}
+                      >
+                        Manual run
+                      </Button>
+                      {(isManualLoading || isRunning) && (
+                        <InlineLoading
+                          description={isRunning ? "Running..." : "Queueing..."}
+                          status={isRunning ? "active" : "active"}
+                        />
+                      )}
                       <Button size="sm" kind="ghost" onClick={() => toggleSchedule(job.id, !enabled)} disabled={!sched.length}>
                         {enabled ? "Stop schedule" : "Start schedule"}
                       </Button>
@@ -1188,50 +1209,32 @@ export default function JobsPage() {
                 </div>
               </Tile>
               <Tile className="rounded-lg border border-slate-200 p-4">
-                <Checkbox
-                  id="edit-notifications-enabled"
-                  labelText="Enable notifications"
-                  checked={editJobCfg.notifications?.enabled || false}
-                  onChange={(e) =>
-                    setEditJobCfg({
-                      ...editJobCfg,
-                      notifications: {
-                        ...(editJobCfg.notifications || { enabled: false, ids: [] }),
-                        enabled: (e.target as HTMLInputElement).checked
-                      }
-                    })
-                  }
-                />
-                {editJobCfg.notifications?.enabled ? (
-                  <div className="mt-3 space-y-2">
-                    {notifications.map((n) => {
-                      const checked = (editJobCfg.notifications?.ids || []).includes(n.id);
-                      return (
-                        <Checkbox
-                          key={n.id}
-                          id={`edit-notification-${n.id}`}
-                          labelText={`${n.name} (${n.config?.endpoint || "HTTP"})`}
-                          checked={checked}
-                          onChange={(e) => {
-                            const enabled = (e.target as HTMLInputElement).checked;
-                            const current = editJobCfg.notifications?.ids || [];
-                            const next = enabled ? [...current, n.id] : current.filter((id: string) => id !== n.id);
-                            setEditJobCfg({
-                              ...editJobCfg,
-                              notifications: {
-                                enabled: true,
-                                ids: next
-                              }
-                            });
-                          }}
-                        />
-                      );
-                    })}
-                    {notifications.length === 0 && <div className="text-xs text-muted">No notifications yet.</div>}
-                  </div>
-                ) : (
-                  <div className="mt-2 text-xs text-muted">Enable notifications to select recipients.</div>
-                )}
+                <div className="text-xs text-muted">Notifications</div>
+                <div className="mt-2">
+                  <MultiSelect
+                    id="edit-notifications-select"
+                    titleText="Enable notifications"
+                    items={notifications}
+                    itemToString={(item) =>
+                      item ? `${item.name || item.id} (${item.config?.endpoint || "HTTP"})` : ""
+                    }
+                    selectedItems={notifications.filter((n) =>
+                      (editJobCfg.notifications?.ids || []).includes(n.id)
+                    )}
+                    onChange={(e: any) => {
+                      const ids = (e.selectedItems || []).map((n: any) => n.id);
+                      setEditJobCfg({
+                        ...editJobCfg,
+                        notifications: {
+                          enabled: ids.length > 0,
+                          ids
+                        }
+                      });
+                    }}
+                    label="Select notifications"
+                  />
+                </div>
+                {notifications.length === 0 && <div className="mt-2 text-xs text-muted">No notifications yet.</div>}
               </Tile>
               <Checkbox
                 id="edit-schedule-enabled"
