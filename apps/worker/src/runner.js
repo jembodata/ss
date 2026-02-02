@@ -39,26 +39,9 @@ export async function runJob({ apiBase, s3, payload, log }) {
 
   const prof = profile.config;
   const jobCfg = job.config;
-
-  const browser = await chromium.launch({ headless: true });
-  const context = await browser.newContext({
-    ignoreHTTPSErrors: !!prof.ignoreHTTPSErrors,
-    viewport: prof.viewport || { width: 1366, height: 768 },
-    userAgent: prof.userAgent || undefined,
-    locale: prof.locale || "en-US",
-    timezoneId: prof.timezoneId || "Asia/Jakarta",
-    extraHTTPHeaders: prof.extraHeaders || {}
-  });
-
-  if (prof.blockResources) {
-    await context.route("**/*", (route) => {
-      const type = route.request().resourceType();
-      if (["image","font","media"].includes(type)) return route.abort();
-      return route.continue();
-    });
-  }
-
-  const page = await context.newPage();
+  let browser = null;
+  let context = null;
+  let page = null;
   const artifacts = [];
 
   const captureOne = async (capture, phase) => {
@@ -119,6 +102,26 @@ export async function runJob({ apiBase, s3, payload, log }) {
   };
 
   try {
+    browser = await chromium.launch({ headless: true });
+    context = await browser.newContext({
+      ignoreHTTPSErrors: !!prof.ignoreHTTPSErrors,
+      viewport: prof.viewport || { width: 1366, height: 768 },
+      userAgent: prof.userAgent || undefined,
+      locale: prof.locale || "en-US",
+      timezoneId: prof.timezoneId || "Asia/Jakarta",
+      extraHTTPHeaders: prof.extraHeaders || {}
+    });
+
+    if (prof.blockResources) {
+      await context.route("**/*", (route) => {
+        const type = route.request().resourceType();
+        if (["image","font","media"].includes(type)) return route.abort();
+        return route.continue();
+      });
+    }
+
+    page = await context.newPage();
+
     const navTimeout = Number.isFinite(jobCfg.navigationTimeoutMs) ? jobCfg.navigationTimeoutMs : 45000;
     await postProgress(apiBase, runId, `Navigating to ${jobCfg.startUrl}`);
     await page.goto(jobCfg.startUrl, { waitUntil: "domcontentloaded", timeout: navTimeout });
@@ -190,22 +193,24 @@ export async function runJob({ apiBase, s3, payload, log }) {
 
     // best-effort failure screenshot
     try {
-      const buffer = await page.screenshot({ type: "png", fullPage: true });
-      const key = `screenshots/${job.id}/${runId}/error_failure.png`;
-      await s3.put(key, buffer);
-      artifacts.push({
-        phase: "postLogin",
-        name: "error_failure",
-        bucket: s3.bucket,
-        objectKey: key,
-        sizeBytes: buffer.length,
-        contentType: "image/png",
-        uploadedExternal: false,
-        externalStatus: null
-      });
+      if (page) {
+        const buffer = await page.screenshot({ type: "png", fullPage: true });
+        const key = `screenshots/${job.id}/${runId}/error_failure.png`;
+        await s3.put(key, buffer);
+        artifacts.push({
+          phase: "postLogin",
+          name: "error_failure",
+          bucket: s3.bucket,
+          objectKey: key,
+          sizeBytes: buffer.length,
+          contentType: "image/png",
+          uploadedExternal: false,
+          externalStatus: null
+        });
+      }
     } catch {}
 
-    try { await browser.close(); } catch {}
+    try { if (browser) await browser.close(); } catch {}
     await apiPost(apiBase, `/internal/runs/${runId}/complete`, {
       status: "failed",
       error: String(e?.message || e),

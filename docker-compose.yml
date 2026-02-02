@@ -13,7 +13,7 @@ services:
     volumes:
       - minio_data:/data
     ports:
-      - "9000:9000"
+      - "9002:9000"
       - "9001:9001"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/ready"]
@@ -78,12 +78,14 @@ services:
       S3_BUCKET: screenshots
       S3_REGION: us-east-1
 
-      WORKER_CONCURRENCY: "2"
+      WORKER_CONCURRENCY: "1"
     depends_on:
       - api
       - redis
       - minio
-    shm_size: "1gb"
+    shm_size: "2gb"
+    ipc: host
+    init: true
 
   web:
     build:

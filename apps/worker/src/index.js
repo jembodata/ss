@@ -52,4 +52,15 @@ const worker = new Worker(
 
 worker.on("failed", (job, err) => {
   console.error("Job failed", job?.id, err?.message || err);
+  const runId = job?.data?.runId;
+  if (!runId) return;
+  fetch(`${API_BASE_URL}/internal/runs/${encodeURIComponent(runId)}/complete`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      status: "failed",
+      error: String(err?.message || err || "Worker job failed"),
+      artifacts: []
+    })
+  }).catch(() => {});
 });
