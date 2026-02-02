@@ -1406,17 +1406,32 @@ export default function Page() {
                           ) : (
                             <div className="text-xs text-muted">Selector not required</div>
                           )}
-                          <Checkbox
-                            id={`cap-fullpage-${idx}`}
-                            labelText="Full page"
-                            checked={!!cap.fullPage}
-                            disabled={cap.mode !== "page"}
-                            onChange={(e) => {
-                              const next = [...captures];
-                              next[idx] = { ...next[idx], fullPage: (e.target as HTMLInputElement).checked };
-                              setCaptures(next);
-                            }}
-                          />
+                          <div className="flex items-center gap-2">
+                            <Checkbox
+                              id={`cap-fullpage-${idx}`}
+                              labelText="Full page"
+                              checked={!!cap.fullPage}
+                              disabled={cap.mode !== "page"}
+                              onChange={(e) => {
+                                const next = [...captures];
+                                next[idx] = { ...next[idx], fullPage: (e.target as HTMLInputElement).checked };
+                                setCaptures(next);
+                              }}
+                            />
+                            <Button
+                              kind="ghost"
+                              size="sm"
+                              iconDescription="Remove capture"
+                              hasIconOnly
+                              onClick={() => {
+                                const next = [...captures];
+                                next.splice(idx, 1);
+                                setCaptures(next);
+                              }}
+                            >
+                              X
+                            </Button>
+                          </div>
                         </div>
                       ))}
                       <Button kind="secondary" onClick={() => setCaptures([...captures, { name: "capture", phase: "postLogin", mode: "page", fullPage: false }])}>

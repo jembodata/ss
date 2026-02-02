@@ -1182,17 +1182,32 @@ export default function JobsPage() {
                       ) : (
                         <div className="text-xs text-muted">Selector not required</div>
                       )}
-                      <Checkbox
-                        id={`edit-cap-fullpage-${idx}`}
-                        labelText="Full page"
-                        checked={!!cap.fullPage}
-                        disabled={cap.mode !== "page"}
-                        onChange={(e) => {
-                          const next = [...editCaptures];
-                          next[idx] = { ...next[idx], fullPage: (e.target as HTMLInputElement).checked };
-                          setEditCaptures(next);
-                        }}
-                      />
+                      <div className="flex items-center gap-2">
+                        <Checkbox
+                          id={`edit-cap-fullpage-${idx}`}
+                          labelText="Full page"
+                          checked={!!cap.fullPage}
+                          disabled={cap.mode !== "page"}
+                          onChange={(e) => {
+                            const next = [...editCaptures];
+                            next[idx] = { ...next[idx], fullPage: (e.target as HTMLInputElement).checked };
+                            setEditCaptures(next);
+                          }}
+                        />
+                        <Button
+                          kind="ghost"
+                          size="sm"
+                          iconDescription="Remove capture"
+                          hasIconOnly
+                          onClick={() => {
+                            const next = [...editCaptures];
+                            next.splice(idx, 1);
+                            setEditCaptures(next);
+                          }}
+                        >
+                          X
+                        </Button>
+                      </div>
                     </div>
                   ))}
                   <Button
