@@ -1198,14 +1198,13 @@ export default function JobsPage() {
                           kind="ghost"
                           size="sm"
                           iconDescription="Remove capture"
-                          hasIconOnly
                           onClick={() => {
                             const next = [...editCaptures];
                             next.splice(idx, 1);
                             setEditCaptures(next);
                           }}
                         >
-                          X
+                          Remove
                         </Button>
                       </div>
                     </div>

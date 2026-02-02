@@ -1422,14 +1422,13 @@ export default function Page() {
                               kind="ghost"
                               size="sm"
                               iconDescription="Remove capture"
-                              hasIconOnly
                               onClick={() => {
                                 const next = [...captures];
                                 next.splice(idx, 1);
                                 setCaptures(next);
                               }}
                             >
-                              X
+                              Remove
                             </Button>
                           </div>
                         </div>
