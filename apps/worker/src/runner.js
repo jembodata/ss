@@ -43,6 +43,9 @@ export async function runJob({ apiBase, s3, payload, log }) {
   let context = null;
   let page = null;
   const artifacts = [];
+  const runNow = new Date();
+  const dateFolder = `${runNow.getFullYear()}/${String(runNow.getMonth() + 1).padStart(2, "0")}/${String(runNow.getDate()).padStart(2, "0")}`;
+  const jobFolder = sanitize(job?.name || job?.id || "job");
 
   const captureOne = async (capture, phase) => {
     const name = capture.name || `${phase}-${capture.mode}`;
@@ -69,7 +72,7 @@ export async function runJob({ apiBase, s3, payload, log }) {
       buffer = await page.screenshot({ type: "png", fullPage: !!capture.fullPage });
     }
 
-    const key = `screenshots/${job.id}/${runId}/${phase}_${sanitize(name)}.png`;
+    const key = `screenshots/${jobFolder}/${dateFolder}/${phase}_${sanitize(name)}-${runId}.png`;
     await s3.put(key, buffer);
 
     const uploadRes = await maybeUploadExternal(jobCfg.upload, buffer, ctx, { phase, name });
@@ -143,8 +146,14 @@ export async function runJob({ apiBase, s3, payload, log }) {
     const interactionMode = interaction.captureMode || "afterInteraction";
 
     if (!jobCfg.login?.enabled && interaction.enabled && interactionSteps.length > 0) {
+      let interactionFrame = null;
       for (let i = 0; i < interactionSteps.length; i++) {
-        await runSingleStep(page, interactionSteps[i], i, interactionSteps.length, secrets, apiBase, runId, log);
+        const step = interactionSteps[i];
+        if (step.type === "selectFrame") {
+          interactionFrame = await resolveFrameTarget(page, step, apiBase, runId, log);
+          continue;
+        }
+        await runSingleStep(page, interactionFrame, step, i, interactionSteps.length, secrets, apiBase, runId, log);
         if (interactionMode === "afterEachStep") {
           await capturePhase("postLogin");
         }
@@ -158,8 +167,14 @@ export async function runJob({ apiBase, s3, payload, log }) {
     } else {
       const postLoginCaptures = (jobCfg.captures || []).filter(c => c.phase === "postLogin" || c.phase === "both");
       if (postLoginSteps.length > 0) {
+        let postLoginFrame = null;
         for (let i = 0; i < postLoginSteps.length; i++) {
-          await runSingleStep(page, postLoginSteps[i], i, postLoginSteps.length, secrets, apiBase, runId, log);
+          const step = postLoginSteps[i];
+          if (step.type === "selectFrame") {
+            postLoginFrame = await resolveFrameTarget(page, step, apiBase, runId, log);
+            continue;
+          }
+          await runSingleStep(page, postLoginFrame, step, i, postLoginSteps.length, secrets, apiBase, runId, log);
           if (postLoginCaptures[i]) {
             await captureOne(postLoginCaptures[i], "postLogin");
           }
@@ -195,7 +210,7 @@ export async function runJob({ apiBase, s3, payload, log }) {
     try {
       if (page) {
         const buffer = await page.screenshot({ type: "png", fullPage: true });
-        const key = `screenshots/${job.id}/${runId}/error_failure.png`;
+        const key = `screenshots/${jobFolder}/${dateFolder}/error_failure-${runId}.png`;
         await s3.put(key, buffer);
         artifacts.push({
           phase: "postLogin",
@@ -371,12 +386,18 @@ async function sendNotifications({ apiBase, notifications, ctx, artifacts, log, 
 }
 
 async function runSteps(page, steps, secrets, apiBase, runId, log) {
+  let currentFrame = null;
   for (let i = 0; i < steps.length; i++) {
-    await runSingleStep(page, steps[i], i, steps.length, secrets, apiBase, runId, log);
+    const step = steps[i];
+    if (step.type === "selectFrame") {
+      currentFrame = await resolveFrameTarget(page, step, apiBase, runId, log);
+      continue;
+    }
+    await runSingleStep(page, currentFrame, step, i, steps.length, secrets, apiBase, runId, log);
   }
 }
 
-async function runSingleStep(page, step, index, total, secrets, apiBase, runId, log) {
+async function runSingleStep(page, currentFrame, step, index, total, secrets, apiBase, runId, log) {
   const timeout = step.timeoutMs ?? 30000;
   const label = `step ${index + 1}/${total} ${step.type}`;
   log(label);
@@ -386,25 +407,26 @@ async function runSingleStep(page, step, index, total, secrets, apiBase, runId, 
     body: JSON.stringify({ message: label })
   }).catch(()=>{});
 
+  const target = currentFrame || page;
   switch (step.type) {
     case "waitForLoadState":
-      await page.waitForLoadState(step.state || "domcontentloaded", { timeout });
+      await target.waitForLoadState(step.state || "domcontentloaded", { timeout });
       break;
     case "waitForSelector":
       if (!step.selector) throw new Error("waitForSelector requires selector");
-      await page.waitForSelector(step.selector, { timeout });
+      await smartWaitForSelector(page, target, step.selector, timeout);
       break;
     case "waitForURL":
       if (!step.url) throw new Error("waitForURL requires url");
-      await page.waitForURL(step.url, { timeout });
+      await target.waitForURL(step.url, { timeout });
       break;
     case "click":
       if (!step.selector) throw new Error("click requires selector");
-      await page.click(step.selector, { timeout });
+      await smartClick(page, target, step.selector, timeout);
       break;
     case "fill":
       if (!step.selector) throw new Error("fill requires selector");
-      await page.fill(step.selector, resolveValue(step.value, secrets));
+      await target.fill(step.selector, resolveValue(step.value, secrets));
       break;
     case "type":
       await page.keyboard.type(resolveValue(step.value, secrets));
@@ -416,32 +438,151 @@ async function runSingleStep(page, step, index, total, secrets, apiBase, runId, 
       await page.waitForTimeout(step.ms ?? 500);
       break;
     case "scroll":
-      await runScrollStep(page, step, timeout);
+      await runScrollStep(target, step, timeout);
       break;
+    case "assertURLContains": {
+      const expected = String(step.url || "").trim();
+      if (!expected) throw new Error("assertURLContains requires url text");
+      const current = target.url();
+      if (!current.includes(expected)) {
+        throw new Error(`assertURLContains failed: expected "${expected}" in "${current}"`);
+      }
+      break;
+    }
+    case "assertTextContains": {
+      const expected = String(resolveValue(step.value, secrets) || "").trim();
+      if (!expected) throw new Error("assertTextContains requires expected text");
+      if (step.selector) {
+        const locator = target.locator(step.selector).first();
+        await locator.waitFor({ state: "visible", timeout });
+        const text = (await locator.textContent()) || "";
+        if (!text.includes(expected)) {
+          throw new Error(`assertTextContains failed on selector "${step.selector}": expected "${expected}"`);
+        }
+      } else {
+        const text = await target.textContent("body");
+        if (!String(text || "").includes(expected)) {
+          throw new Error(`assertTextContains failed on page: expected "${expected}"`);
+        }
+      }
+      break;
+    }
+    case "assertVisible": {
+      if (!step.selector) throw new Error("assertVisible requires selector");
+      await smartWaitForSelector(page, target, step.selector, timeout, "visible");
+      break;
+    }
     default:
       throw new Error(`Unknown step type: ${step.type}`);
   }
 }
 
-async function runScrollStep(page, step, timeout) {
-  const target = step.scrollTo || "bottom";
+async function runScrollStep(target, step, timeout) {
+  const targetType = step.scrollTo || "bottom";
   const delayMs = Number.isFinite(step.scrollDelayMs) ? step.scrollDelayMs : 250;
   const steps = Number.isFinite(step.scrollSteps) ? Math.max(1, step.scrollSteps) : 6;
-  if (target === "selector") {
+  if (targetType === "selector") {
     if (!step.selector) throw new Error("scroll selector required");
-    const locator = page.locator(step.selector);
+    const locator = target.locator(step.selector);
     await locator.waitFor({ state: "visible", timeout });
     await locator.scrollIntoViewIfNeeded();
     return;
   }
-  if (target === "top") {
-    await page.evaluate(() => window.scrollTo(0, 0));
+  if (targetType === "top") {
+    await target.evaluate(() => window.scrollTo(0, 0));
     return;
   }
   for (let i = 0; i < steps; i++) {
-    await page.evaluate(() => window.scrollBy(0, window.innerHeight));
+    await target.evaluate(() => window.scrollBy(0, window.innerHeight));
     if (delayMs > 0) await page.waitForTimeout(delayMs);
   }
+}
+
+async function resolveFrameTarget(page, step, apiBase, runId, log) {
+  const selector = String(step.selector || "").trim();
+  const urlContains = String(step.url || "").trim();
+  const timeout = step.timeoutMs ?? 30000;
+
+  if (selector.toLowerCase() === "main" || urlContains.toLowerCase() === "main") {
+    const msg = "selectFrame -> main";
+    log(msg);
+    await postProgress(apiBase, runId, msg);
+    return null;
+  }
+
+  if (selector) {
+    await page.waitForSelector(selector, { timeout });
+    const handle = await page.$(selector);
+    const frame = await handle?.contentFrame();
+    if (!frame) throw new Error("selectFrame failed: no frame for selector");
+    const msg = `selectFrame by selector ${selector}`;
+    log(msg);
+    await postProgress(apiBase, runId, msg);
+    return frame;
+  }
+
+  if (urlContains) {
+    const end = Date.now() + timeout;
+    while (Date.now() < end) {
+      const frame = page.frames().find((f) => f.url().includes(urlContains));
+      if (frame) {
+        const msg = `selectFrame by url ${urlContains}`;
+        log(msg);
+        await postProgress(apiBase, runId, msg);
+        return frame;
+      }
+      await page.waitForTimeout(250);
+    }
+    throw new Error(`selectFrame failed: no frame url contains "${urlContains}"`);
+  }
+
+  throw new Error("selectFrame requires selector or url");
+}
+
+async function smartWaitForSelector(page, target, selector, timeout, state = "attached") {
+  try {
+    await target.waitForSelector(selector, { timeout, state });
+    return;
+  } catch {}
+
+  const end = Date.now() + timeout;
+  while (Date.now() < end) {
+    const frames = [page, ...page.frames()];
+    for (const frame of frames) {
+      try {
+        const handle = await frame.$(selector);
+        if (handle) {
+          await frame.waitForSelector(selector, { timeout: 2000, state });
+          return;
+        }
+      } catch {}
+    }
+    await page.waitForTimeout(250);
+  }
+  throw new Error(`smartWaitForSelector timeout for ${selector}`);
+}
+
+async function smartClick(page, target, selector, timeout) {
+  try {
+    await target.click(selector, { timeout });
+    return;
+  } catch {}
+
+  const end = Date.now() + timeout;
+  while (Date.now() < end) {
+    const frames = [page, ...page.frames()];
+    for (const frame of frames) {
+      try {
+        const handle = await frame.$(selector);
+        if (handle) {
+          await frame.click(selector, { timeout: 2000 });
+          return;
+        }
+      } catch {}
+    }
+    await page.waitForTimeout(250);
+  }
+  throw new Error(`smartClick timeout for ${selector}`);
 }
 
 async function autoScrollForLazyLoad(page, apiBase, runId, log) {

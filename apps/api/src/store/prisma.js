@@ -208,6 +208,19 @@ export async function makePrismaStore(databaseUrl) {
         data: { status, ended_at: nowIso(), error: error || null }
       });
     },
+    async failStaleRunningRuns(cutoffIso, reason, nowIso) {
+      const result = await prisma.runs.updateMany({
+        where: {
+          status: "running",
+          OR: [
+            { started_at: { not: null, lt: cutoffIso } },
+            { AND: [{ started_at: null }, { scheduled_at: { lt: cutoffIso } }] }
+          ]
+        },
+        data: { status: "failed", ended_at: nowIso(), error: reason }
+      });
+      return result.count || 0;
+    },
     async listSchedules() {
       return prisma.schedules.findMany({ orderBy: { created_at: "desc" } });
     },
@@ -262,6 +275,22 @@ export async function makePrismaStore(databaseUrl) {
         startIso,
         endIso
       );
+    },
+    async countRunsByStatus() {
+      const grouped = await prisma.runs.groupBy({
+        by: ["status"],
+        _count: { _all: true }
+      });
+      const out = { queued: 0, running: 0, success: 0, failed: 0, total: 0 };
+      for (const row of grouped) {
+        const status = String(row.status || "");
+        const count = Number(row._count?._all || 0);
+        if (Object.prototype.hasOwnProperty.call(out, status)) {
+          out[status] = count;
+        }
+        out.total += count;
+      }
+      return out;
     }
   };
 }

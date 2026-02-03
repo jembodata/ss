@@ -738,6 +738,10 @@ export default function Page() {
                             <SelectItem value="waitForURL" text="waitForURL" />
                             <SelectItem value="waitForLoadState" text="waitForLoadState" />
                             <SelectItem value="sleep" text="sleep" />
+                            <SelectItem value="selectFrame" text="selectFrame" />
+                            <SelectItem value="assertURLContains" text="assertURLContains" />
+                            <SelectItem value="assertTextContains" text="assertTextContains" />
+                            <SelectItem value="assertVisible" text="assertVisible" />
                           </Select>
                           <TextInput
                             id="login-step-timeout"
@@ -746,10 +750,10 @@ export default function Page() {
                             onChange={(e) => setLoginStepTimeoutSeconds(e.target.value)}
                           />
                         </div>
-                        {['click', 'fill', 'waitForSelector'].includes(loginStepType) && (
+                        {['click', 'fill', 'waitForSelector', 'assertVisible', 'selectFrame'].includes(loginStepType) && (
                           <TextInput
                             id="login-step-selector"
-                            labelText="Selector"
+                            labelText={loginStepType === "selectFrame" ? "Frame selector (optional)" : "Selector"}
                             value={loginStepSelector}
                             onChange={(e) => setLoginStepSelector(e.target.value)}
                           />
@@ -770,6 +774,14 @@ export default function Page() {
                             onChange={(e) => setLoginStepValue(e.target.value)}
                           />
                         )}
+                        {loginStepType === "assertTextContains" && (
+                          <TextInput
+                            id="login-step-assert-text"
+                            labelText="Expected text"
+                            value={loginStepValue}
+                            onChange={(e) => setLoginStepValue(e.target.value)}
+                          />
+                        )}
                       {loginStepType === "press" && (
                         <TextInput
                           id="login-step-key"
@@ -781,10 +793,16 @@ export default function Page() {
                       {loginStepType === "press" && (
                         <div className="text-xs text-muted">{pressKeyHint}</div>
                       )}
-                        {loginStepType === "waitForURL" && (
+                        {["waitForURL", "assertURLContains", "selectFrame"].includes(loginStepType) && (
                           <TextInput
                             id="login-step-url"
-                            labelText="URL or pattern"
+                            labelText={
+                              loginStepType === "selectFrame"
+                                ? "Frame URL contains (optional)"
+                                : loginStepType === "assertURLContains"
+                                  ? "Expected URL contains"
+                                  : "URL or pattern"
+                            }
                             value={loginStepUrl}
                             onChange={(e) => setLoginStepUrl(e.target.value)}
                           />
@@ -851,6 +869,26 @@ export default function Page() {
                                 }
                                 step.ms = Math.round(sleepSec * 1000);
                               }
+                              if (loginStepType === "assertURLContains") {
+                                if (!loginStepUrl) return setLoginStepStatus("Expected URL text is required.");
+                                step.url = loginStepUrl;
+                              }
+                              if (loginStepType === "assertTextContains") {
+                                if (!loginStepValue) return setLoginStepStatus("Expected text is required.");
+                                step.value = loginStepValue;
+                                if (loginStepSelector) step.selector = loginStepSelector;
+                              }
+                              if (loginStepType === "assertVisible") {
+                                if (!loginStepSelector) return setLoginStepStatus("Selector required for assertVisible.");
+                                step.selector = loginStepSelector;
+                              }
+                              if (loginStepType === "selectFrame") {
+                                if (!loginStepSelector && !loginStepUrl) {
+                                  return setLoginStepStatus("Frame selector or URL contains is required.");
+                                }
+                                if (loginStepSelector) step.selector = loginStepSelector;
+                                if (loginStepUrl) step.url = loginStepUrl;
+                              }
                               setLoginStepStatus("");
                               setJobCfg({ ...jobCfg, login: { enabled: true, steps: [...jobCfg.login.steps, step] } });
                             }}
@@ -902,6 +940,10 @@ export default function Page() {
                               <SelectItem value="waitForURL" text="waitForURL" />
                               <SelectItem value="waitForLoadState" text="waitForLoadState" />
                               <SelectItem value="sleep" text="sleep" />
+                              <SelectItem value="selectFrame" text="selectFrame" />
+                              <SelectItem value="assertURLContains" text="assertURLContains" />
+                              <SelectItem value="assertTextContains" text="assertTextContains" />
+                              <SelectItem value="assertVisible" text="assertVisible" />
                             </Select>
                             <TextInput
                               id="post-step-timeout"
@@ -910,10 +952,10 @@ export default function Page() {
                               onChange={(e) => setPostStepTimeoutSeconds(e.target.value)}
                             />
                           </div>
-                          {["click", "fill", "waitForSelector"].includes(postStepType) && (
+                          {["click", "fill", "waitForSelector", "assertVisible", "selectFrame"].includes(postStepType) && (
                             <TextInput
                               id="post-step-selector"
-                              labelText="Selector"
+                              labelText={postStepType === "selectFrame" ? "Frame selector (optional)" : "Selector"}
                               value={postStepSelector}
                               onChange={(e) => setPostStepSelector(e.target.value)}
                             />
@@ -934,6 +976,14 @@ export default function Page() {
                               onChange={(e) => setPostStepValue(e.target.value)}
                             />
                           )}
+                          {postStepType === "assertTextContains" && (
+                            <TextInput
+                              id="post-step-assert-text"
+                              labelText="Expected text"
+                              value={postStepValue}
+                              onChange={(e) => setPostStepValue(e.target.value)}
+                            />
+                          )}
                           {postStepType === "press" && (
                             <TextInput
                               id="post-step-key"
@@ -945,10 +995,16 @@ export default function Page() {
                           {postStepType === "press" && (
                             <div className="text-xs text-muted">{pressKeyHint}</div>
                           )}
-                          {postStepType === "waitForURL" && (
+                          {["waitForURL", "assertURLContains", "selectFrame"].includes(postStepType) && (
                             <TextInput
                               id="post-step-url"
-                              labelText="URL or pattern"
+                              labelText={
+                                postStepType === "selectFrame"
+                                  ? "Frame URL contains (optional)"
+                                  : postStepType === "assertURLContains"
+                                    ? "Expected URL contains"
+                                    : "URL or pattern"
+                              }
                               value={postStepUrl}
                               onChange={(e) => setPostStepUrl(e.target.value)}
                             />
@@ -1014,6 +1070,26 @@ export default function Page() {
                                     return setPostStepStatus("Sleep seconds must be >= 0.");
                                   }
                                   step.ms = Math.round(sleepSec * 1000);
+                                }
+                                if (postStepType === "assertURLContains") {
+                                  if (!postStepUrl) return setPostStepStatus("Expected URL text is required.");
+                                  step.url = postStepUrl;
+                                }
+                                if (postStepType === "assertTextContains") {
+                                  if (!postStepValue) return setPostStepStatus("Expected text is required.");
+                                  step.value = postStepValue;
+                                  if (postStepSelector) step.selector = postStepSelector;
+                                }
+                                if (postStepType === "assertVisible") {
+                                  if (!postStepSelector) return setPostStepStatus("Selector required for assertVisible.");
+                                  step.selector = postStepSelector;
+                                }
+                                if (postStepType === "selectFrame") {
+                                  if (!postStepSelector && !postStepUrl) {
+                                    return setPostStepStatus("Frame selector or URL contains is required.");
+                                  }
+                                  if (postStepSelector) step.selector = postStepSelector;
+                                  if (postStepUrl) step.url = postStepUrl;
                                 }
                                 setPostStepStatus("");
                                 const next = [...(jobCfg.postLoginSteps || []), step];
@@ -1159,6 +1235,10 @@ export default function Page() {
                               <SelectItem value="waitForLoadState" text="waitForLoadState" />
                               <SelectItem value="sleep" text="wait" />
                               <SelectItem value="scroll" text="scroll" />
+                              <SelectItem value="selectFrame" text="selectFrame" />
+                              <SelectItem value="assertURLContains" text="assertURLContains" />
+                              <SelectItem value="assertTextContains" text="assertTextContains" />
+                              <SelectItem value="assertVisible" text="assertVisible" />
                             </Select>
                             <TextInput
                               id="interaction-step-timeout"
@@ -1167,10 +1247,10 @@ export default function Page() {
                               onChange={(e) => setInteractionStepTimeoutSeconds(e.target.value)}
                             />
                           </div>
-                          {["click", "fill", "waitForSelector"].includes(interactionStepType) && (
+                          {["click", "fill", "waitForSelector", "assertVisible", "selectFrame"].includes(interactionStepType) && (
                             <TextInput
                               id="interaction-step-selector"
-                              labelText="Selector"
+                              labelText={interactionStepType === "selectFrame" ? "Frame selector (optional)" : "Selector"}
                               value={interactionStepSelector}
                               onChange={(e) => setInteractionStepSelector(e.target.value)}
                             />
@@ -1191,6 +1271,14 @@ export default function Page() {
                               onChange={(e) => setInteractionStepValue(e.target.value)}
                             />
                           )}
+                          {interactionStepType === "assertTextContains" && (
+                            <TextInput
+                              id="interaction-step-assert-text"
+                              labelText="Expected text"
+                              value={interactionStepValue}
+                              onChange={(e) => setInteractionStepValue(e.target.value)}
+                            />
+                          )}
                           {interactionStepType === "press" && (
                             <TextInput
                               id="interaction-step-key"
@@ -1202,10 +1290,16 @@ export default function Page() {
                           {interactionStepType === "press" && (
                             <div className="text-xs text-muted">{pressKeyHint}</div>
                           )}
-                          {interactionStepType === "waitForURL" && (
+                          {["waitForURL", "assertURLContains", "selectFrame"].includes(interactionStepType) && (
                             <TextInput
                               id="interaction-step-url"
-                              labelText="URL or pattern"
+                              labelText={
+                                interactionStepType === "selectFrame"
+                                  ? "Frame URL contains (optional)"
+                                  : interactionStepType === "assertURLContains"
+                                    ? "Expected URL contains"
+                                    : "URL or pattern"
+                              }
                               value={interactionStepUrl}
                               onChange={(e) => setInteractionStepUrl(e.target.value)}
                             />
@@ -1306,6 +1400,26 @@ export default function Page() {
                                     return setInteractionStepStatus("Wait seconds must be >= 0.");
                                   }
                                   step.ms = Math.round(sleepSec * 1000);
+                                }
+                                if (interactionStepType === "assertURLContains") {
+                                  if (!interactionStepUrl) return setInteractionStepStatus("Expected URL text is required.");
+                                  step.url = interactionStepUrl;
+                                }
+                                if (interactionStepType === "assertTextContains") {
+                                  if (!interactionStepValue) return setInteractionStepStatus("Expected text is required.");
+                                  step.value = interactionStepValue;
+                                  if (interactionStepSelector) step.selector = interactionStepSelector;
+                                }
+                                if (interactionStepType === "assertVisible") {
+                                  if (!interactionStepSelector) return setInteractionStepStatus("Selector required for assertVisible.");
+                                  step.selector = interactionStepSelector;
+                                }
+                                if (interactionStepType === "selectFrame") {
+                                  if (!interactionStepSelector && !interactionStepUrl) {
+                                    return setInteractionStepStatus("Frame selector or URL contains is required.");
+                                  }
+                                  if (interactionStepSelector) step.selector = interactionStepSelector;
+                                  if (interactionStepUrl) step.url = interactionStepUrl;
                                 }
                                 if (interactionStepType === "scroll") {
                                   step.scrollTo = interactionScrollTo || "bottom";

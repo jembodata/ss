@@ -19,6 +19,12 @@ export const openApiSpec = {
         }
       }
     },
+    "/metrics/summary": {
+      get: {
+        summary: "Queue and run metrics summary",
+        responses: { "200": { description: "OK" } }
+      }
+    },
     "/profiles": {
       get: {
         summary: "List profiles",

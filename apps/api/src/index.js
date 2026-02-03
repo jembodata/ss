@@ -13,6 +13,9 @@ const PORT = Number(process.env.PORT || 8080);
 const REDIS_URL = process.env.REDIS_URL || "redis://localhost:6379";
 const DB_PROVIDER = String(process.env.DB_PROVIDER || "sqlite").toLowerCase();
 const DATABASE_URL = process.env.DATABASE_URL || "file:/data/app.db";
+const RUN_ATTEMPTS = Math.max(1, Number(process.env.RUN_ATTEMPTS || 2));
+const RUN_BACKOFF_MS = Math.max(100, Number(process.env.RUN_BACKOFF_MS || 3000));
+const RUN_STALE_TIMEOUT_MINUTES = Math.max(1, Number(process.env.RUN_STALE_TIMEOUT_MINUTES || 30));
 const S3_BUCKET = process.env.S3_BUCKET || "screenshots";
 const store = await makeStore({ provider: DB_PROVIDER, databaseUrl: DATABASE_URL });
 
@@ -46,6 +49,19 @@ function getNotificationsByIds(ids) {
 
 // ---- JSON API ----
 api.get("/health", (req,res)=>res.json({ ok:true, time: nowIso() }));
+api.get("/metrics/summary", async (req,res)=>{
+  try {
+    const queueCounts = await queue.getJobCounts("waiting", "active", "completed", "failed", "delayed", "paused");
+    const runCounts = await store.countRunsByStatus();
+    res.json({
+      time: nowIso(),
+      queue: queueCounts,
+      runs: runCounts
+    });
+  } catch (e) {
+    res.status(500).json({ error: "Failed to collect metrics" });
+  }
+});
 
 api.get("/profiles", async (req,res)=>{
   const rows = await store.listProfiles();
@@ -382,7 +398,12 @@ api.post("/jobs/:jobId/run-now", async (req,res)=>{
   const runId = nanoid();
   await store.createRun({ id: runId, jobId, status: "queued", scheduledAt: nowIso() });
 
-  await queue.add("run", { runId, jobId }, { attempts: 1, removeOnComplete: true, removeOnFail: false });
+  await queue.add("run", { runId, jobId }, {
+    attempts: RUN_ATTEMPTS,
+    backoff: { type: "exponential", delay: RUN_BACKOFF_MS },
+    removeOnComplete: true,
+    removeOnFail: false
+  });
   res.json({ runId });
 });
 api.delete("/runs/:runId", async (req,res)=>{
@@ -442,7 +463,13 @@ api.post("/jobs/:jobId/schedules", async (req,res)=>{
     await queue.add(
       "run",
       { scheduled: true, jobId, runId: null, scheduleId },
-      { repeat: { cron, tz: timezone }, jobId: `schedule:${scheduleId}`, removeOnComplete: true }
+      {
+        repeat: { cron, tz: timezone },
+        jobId: `schedule:${scheduleId}`,
+        attempts: RUN_ATTEMPTS,
+        backoff: { type: "exponential", delay: RUN_BACKOFF_MS },
+        removeOnComplete: true
+      }
     );
     scheduleIds.push(scheduleId);
   }
@@ -478,7 +505,13 @@ api.patch("/jobs/:jobId/schedules/status", async (req,res)=>{
       await queue.add(
         "run",
         { scheduled: true, jobId: s.job_id, runId: null, scheduleId: s.id },
-        { repeat: { cron: s.cron, tz: s.timezone }, jobId: `schedule:${s.id}`, removeOnComplete: true }
+        {
+          repeat: { cron: s.cron, tz: s.timezone },
+          jobId: `schedule:${s.id}`,
+          attempts: RUN_ATTEMPTS,
+          backoff: { type: "exponential", delay: RUN_BACKOFF_MS },
+          removeOnComplete: true
+        }
       );
     }
   } else {
@@ -749,10 +782,30 @@ async function loadSchedules() {
     await queue.add(
       "run",
       { scheduled: true, jobId: s.job_id, runId: null, scheduleId: s.id },
-      { repeat: { cron: s.cron, tz: s.timezone }, jobId: `schedule:${s.id}`, removeOnComplete: true }
+      {
+        repeat: { cron: s.cron, tz: s.timezone },
+        jobId: `schedule:${s.id}`,
+        attempts: RUN_ATTEMPTS,
+        backoff: { type: "exponential", delay: RUN_BACKOFF_MS },
+        removeOnComplete: true
+      }
     );
   }
 }
+async function recoverStaleRunningRuns() {
+  try {
+    const cutoff = new Date(Date.now() - RUN_STALE_TIMEOUT_MINUTES * 60 * 1000).toISOString();
+    const reason = `Run marked failed by recovery (stale > ${RUN_STALE_TIMEOUT_MINUTES}m)`;
+    const changed = await store.failStaleRunningRuns(cutoff, reason, nowIso);
+    if (changed > 0) {
+      console.log(`[recovery] marked ${changed} stale runs as failed`);
+    }
+  } catch (e) {
+    console.error("[recovery] failed", e?.message || e);
+  }
+}
+await recoverStaleRunningRuns();
+setInterval(recoverStaleRunningRuns, 60 * 1000);
 await loadSchedules();
 
 app.listen(PORT, ()=> console.log(`API listening on :${PORT}`));

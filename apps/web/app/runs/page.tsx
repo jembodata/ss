@@ -176,6 +176,7 @@ function RunsContent() {
                   }
                 />
               </div>
+              <pre className="mt-3 whitespace-pre-wrap text-xs text-muted">{detail.run.log_tail}</pre>
             </Tile>
           )}
           <div className="mt-3">

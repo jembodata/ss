@@ -22,7 +22,11 @@ export const StepSchema = z.object({
     "type",
     "press",
     "sleep",
-    "scroll"
+    "scroll",
+    "selectFrame",
+    "assertURLContains",
+    "assertTextContains",
+    "assertVisible"
   ]),
   selector: z.string().optional(),
   value: z.string().optional(),

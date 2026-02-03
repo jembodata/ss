@@ -101,5 +101,13 @@ export const api = {
       }),
     remove: (id: string) =>
       request("/api/v1/notifications/" + encodeURIComponent(id), { method: "DELETE" })
+  },
+  metrics: {
+    summary: () =>
+      request<{
+        time: string;
+        queue: Record<string, number>;
+        runs: Record<string, number>;
+      }>("/api/v1/metrics/summary")
   }
 };

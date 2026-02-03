@@ -505,6 +505,10 @@ export default function JobsPage() {
                           <SelectItem value="waitForURL" text="waitForURL" />
                           <SelectItem value="waitForLoadState" text="waitForLoadState" />
                           <SelectItem value="sleep" text="sleep" />
+                          <SelectItem value="selectFrame" text="selectFrame" />
+                          <SelectItem value="assertURLContains" text="assertURLContains" />
+                          <SelectItem value="assertTextContains" text="assertTextContains" />
+                          <SelectItem value="assertVisible" text="assertVisible" />
                         </Select>
                         <TextInput
                           id="edit-login-step-timeout"
@@ -513,10 +517,10 @@ export default function JobsPage() {
                           onChange={(e) => setEditLoginStepTimeoutSeconds(e.target.value)}
                         />
                       </div>
-                      {["click", "fill", "waitForSelector"].includes(editLoginStepType) && (
+                      {["click", "fill", "waitForSelector", "assertVisible", "selectFrame"].includes(editLoginStepType) && (
                         <TextInput
                           id="edit-login-step-selector"
-                          labelText="Selector"
+                          labelText={editLoginStepType === "selectFrame" ? "Frame selector (optional)" : "Selector"}
                           value={editLoginStepSelector}
                           onChange={(e) => setEditLoginStepSelector(e.target.value)}
                         />
@@ -537,6 +541,14 @@ export default function JobsPage() {
                           onChange={(e) => setEditLoginStepValue(e.target.value)}
                         />
                       )}
+                      {editLoginStepType === "assertTextContains" && (
+                        <TextInput
+                          id="edit-login-step-assert-text"
+                          labelText="Expected text"
+                          value={editLoginStepValue}
+                          onChange={(e) => setEditLoginStepValue(e.target.value)}
+                        />
+                      )}
                       {editLoginStepType === "press" && (
                         <TextInput
                           id="edit-login-step-key"
@@ -548,10 +560,16 @@ export default function JobsPage() {
                       {editLoginStepType === "press" && (
                         <div className="text-xs text-muted">{pressKeyHint}</div>
                       )}
-                      {editLoginStepType === "waitForURL" && (
+                      {["waitForURL", "assertURLContains", "selectFrame"].includes(editLoginStepType) && (
                         <TextInput
                           id="edit-login-step-url"
-                          labelText="URL or pattern"
+                          labelText={
+                            editLoginStepType === "selectFrame"
+                              ? "Frame URL contains (optional)"
+                              : editLoginStepType === "assertURLContains"
+                                ? "Expected URL contains"
+                                : "URL or pattern"
+                          }
                           value={editLoginStepUrl}
                           onChange={(e) => setEditLoginStepUrl(e.target.value)}
                         />
@@ -617,6 +635,26 @@ export default function JobsPage() {
                                 return setEditLoginStepStatus("Sleep seconds must be >= 0.");
                               }
                               step.ms = Math.round(sleepSec * 1000);
+                            }
+                            if (editLoginStepType === "assertURLContains") {
+                              if (!editLoginStepUrl) return setEditLoginStepStatus("Expected URL text is required.");
+                              step.url = editLoginStepUrl;
+                            }
+                            if (editLoginStepType === "assertTextContains") {
+                              if (!editLoginStepValue) return setEditLoginStepStatus("Expected text is required.");
+                              step.value = editLoginStepValue;
+                              if (editLoginStepSelector) step.selector = editLoginStepSelector;
+                            }
+                            if (editLoginStepType === "assertVisible") {
+                              if (!editLoginStepSelector) return setEditLoginStepStatus("Selector required for assertVisible.");
+                              step.selector = editLoginStepSelector;
+                            }
+                            if (editLoginStepType === "selectFrame") {
+                              if (!editLoginStepSelector && !editLoginStepUrl) {
+                                return setEditLoginStepStatus("Frame selector or URL contains is required.");
+                              }
+                              if (editLoginStepSelector) step.selector = editLoginStepSelector;
+                              if (editLoginStepUrl) step.url = editLoginStepUrl;
                             }
                             setEditLoginStepStatus("");
                             setEditJobCfg({
@@ -759,6 +797,10 @@ export default function JobsPage() {
                             <SelectItem value="waitForLoadState" text="waitForLoadState" />
                             <SelectItem value="sleep" text="wait" />
                             <SelectItem value="scroll" text="scroll" />
+                            <SelectItem value="selectFrame" text="selectFrame" />
+                            <SelectItem value="assertURLContains" text="assertURLContains" />
+                            <SelectItem value="assertTextContains" text="assertTextContains" />
+                            <SelectItem value="assertVisible" text="assertVisible" />
                           </Select>
                           <TextInput
                             id="edit-interaction-step-timeout"
@@ -767,10 +809,10 @@ export default function JobsPage() {
                             onChange={(e) => setEditInteractionStepTimeoutSeconds(e.target.value)}
                           />
                         </div>
-                        {["click", "fill", "waitForSelector"].includes(editInteractionStepType) && (
+                        {["click", "fill", "waitForSelector", "assertVisible", "selectFrame"].includes(editInteractionStepType) && (
                           <TextInput
                             id="edit-interaction-step-selector"
-                            labelText="Selector"
+                            labelText={editInteractionStepType === "selectFrame" ? "Frame selector (optional)" : "Selector"}
                             value={editInteractionStepSelector}
                             onChange={(e) => setEditInteractionStepSelector(e.target.value)}
                           />
@@ -791,6 +833,14 @@ export default function JobsPage() {
                             onChange={(e) => setEditInteractionStepValue(e.target.value)}
                           />
                         )}
+                        {editInteractionStepType === "assertTextContains" && (
+                          <TextInput
+                            id="edit-interaction-step-assert-text"
+                            labelText="Expected text"
+                            value={editInteractionStepValue}
+                            onChange={(e) => setEditInteractionStepValue(e.target.value)}
+                          />
+                        )}
                         {editInteractionStepType === "press" && (
                           <TextInput
                             id="edit-interaction-step-key"
@@ -802,10 +852,16 @@ export default function JobsPage() {
                         {editInteractionStepType === "press" && (
                           <div className="text-xs text-muted">{pressKeyHint}</div>
                         )}
-                        {editInteractionStepType === "waitForURL" && (
+                        {["waitForURL", "assertURLContains", "selectFrame"].includes(editInteractionStepType) && (
                           <TextInput
                             id="edit-interaction-step-url"
-                            labelText="URL or pattern"
+                            labelText={
+                              editInteractionStepType === "selectFrame"
+                                ? "Frame URL contains (optional)"
+                                : editInteractionStepType === "assertURLContains"
+                                  ? "Expected URL contains"
+                                  : "URL or pattern"
+                            }
                             value={editInteractionStepUrl}
                             onChange={(e) => setEditInteractionStepUrl(e.target.value)}
                           />
@@ -907,6 +963,26 @@ export default function JobsPage() {
                                 }
                                 step.ms = Math.round(sleepSec * 1000);
                               }
+                              if (editInteractionStepType === "assertURLContains") {
+                                if (!editInteractionStepUrl) return setEditInteractionStepStatus("Expected URL text is required.");
+                                step.url = editInteractionStepUrl;
+                              }
+                              if (editInteractionStepType === "assertTextContains") {
+                                if (!editInteractionStepValue) return setEditInteractionStepStatus("Expected text is required.");
+                                step.value = editInteractionStepValue;
+                                if (editInteractionStepSelector) step.selector = editInteractionStepSelector;
+                              }
+                              if (editInteractionStepType === "assertVisible") {
+                                if (!editInteractionStepSelector) return setEditInteractionStepStatus("Selector required for assertVisible.");
+                                step.selector = editInteractionStepSelector;
+                              }
+                              if (editInteractionStepType === "selectFrame") {
+                                if (!editInteractionStepSelector && !editInteractionStepUrl) {
+                                  return setEditInteractionStepStatus("Frame selector or URL contains is required.");
+                                }
+                                if (editInteractionStepSelector) step.selector = editInteractionStepSelector;
+                                if (editInteractionStepUrl) step.url = editInteractionStepUrl;
+                              }
                               if (editInteractionStepType === "scroll") {
                                 step.scrollTo = editInteractionScrollTo || "bottom";
                                 const steps = Number(editInteractionScrollSteps);
@@ -993,6 +1069,10 @@ export default function JobsPage() {
                       <SelectItem value="waitForURL" text="waitForURL" />
                       <SelectItem value="waitForLoadState" text="waitForLoadState" />
                       <SelectItem value="sleep" text="sleep" />
+                      <SelectItem value="selectFrame" text="selectFrame" />
+                      <SelectItem value="assertURLContains" text="assertURLContains" />
+                      <SelectItem value="assertTextContains" text="assertTextContains" />
+                      <SelectItem value="assertVisible" text="assertVisible" />
                     </Select>
                     <TextInput
                       id="edit-post-step-timeout"
@@ -1001,10 +1081,10 @@ export default function JobsPage() {
                       onChange={(e) => setEditPostStepTimeoutSeconds(e.target.value)}
                     />
                   </div>
-                  {["click", "fill", "waitForSelector"].includes(editPostStepType) && (
+                  {["click", "fill", "waitForSelector", "assertVisible", "selectFrame"].includes(editPostStepType) && (
                     <TextInput
                       id="edit-post-step-selector"
-                      labelText="Selector"
+                      labelText={editPostStepType === "selectFrame" ? "Frame selector (optional)" : "Selector"}
                       value={editPostStepSelector}
                       onChange={(e) => setEditPostStepSelector(e.target.value)}
                     />
@@ -1025,6 +1105,14 @@ export default function JobsPage() {
                       onChange={(e) => setEditPostStepValue(e.target.value)}
                     />
                   )}
+                  {editPostStepType === "assertTextContains" && (
+                    <TextInput
+                      id="edit-post-step-assert-text"
+                      labelText="Expected text"
+                      value={editPostStepValue}
+                      onChange={(e) => setEditPostStepValue(e.target.value)}
+                    />
+                  )}
                   {editPostStepType === "press" && (
                     <TextInput
                       id="edit-post-step-key"
@@ -1036,10 +1124,16 @@ export default function JobsPage() {
                   {editPostStepType === "press" && (
                     <div className="text-xs text-muted">{pressKeyHint}</div>
                   )}
-                  {editPostStepType === "waitForURL" && (
+                  {["waitForURL", "assertURLContains", "selectFrame"].includes(editPostStepType) && (
                     <TextInput
                       id="edit-post-step-url"
-                      labelText="URL or pattern"
+                      labelText={
+                        editPostStepType === "selectFrame"
+                          ? "Frame URL contains (optional)"
+                          : editPostStepType === "assertURLContains"
+                            ? "Expected URL contains"
+                            : "URL or pattern"
+                      }
                       value={editPostStepUrl}
                       onChange={(e) => setEditPostStepUrl(e.target.value)}
                     />
@@ -1105,6 +1199,26 @@ export default function JobsPage() {
                             return setEditPostStepStatus("Sleep seconds must be >= 0.");
                           }
                           step.ms = Math.round(sleepSec * 1000);
+                        }
+                        if (editPostStepType === "assertURLContains") {
+                          if (!editPostStepUrl) return setEditPostStepStatus("Expected URL text is required.");
+                          step.url = editPostStepUrl;
+                        }
+                        if (editPostStepType === "assertTextContains") {
+                          if (!editPostStepValue) return setEditPostStepStatus("Expected text is required.");
+                          step.value = editPostStepValue;
+                          if (editPostStepSelector) step.selector = editPostStepSelector;
+                        }
+                        if (editPostStepType === "assertVisible") {
+                          if (!editPostStepSelector) return setEditPostStepStatus("Selector required for assertVisible.");
+                          step.selector = editPostStepSelector;
+                        }
+                        if (editPostStepType === "selectFrame") {
+                          if (!editPostStepSelector && !editPostStepUrl) {
+                            return setEditPostStepStatus("Frame selector or URL contains is required.");
+                          }
+                          if (editPostStepSelector) step.selector = editPostStepSelector;
+                          if (editPostStepUrl) step.url = editPostStepUrl;
                         }
                         setEditPostStepStatus("");
                         const next = [...(editJobCfg.postLoginSteps || []), step];

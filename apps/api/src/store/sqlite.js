@@ -170,6 +170,14 @@ export function makeSqliteStore(databaseUrl) {
       db.prepare("UPDATE runs SET status=?, ended_at=?, error=? WHERE id=?")
         .run(status, nowIso(), error || null, runId);
     },
+    failStaleRunningRuns(cutoffIso, reason, nowIso) {
+      const result = db
+        .prepare(
+          "UPDATE runs SET status='failed', ended_at=?, error=? WHERE status='running' AND ((started_at IS NOT NULL AND started_at < ?) OR (started_at IS NULL AND scheduled_at < ?))"
+        )
+        .run(nowIso(), reason, cutoffIso, cutoffIso);
+      return result.changes || 0;
+    },
     listSchedules() {
       return db.prepare("SELECT * FROM schedules ORDER BY created_at DESC").all();
     },
@@ -209,6 +217,21 @@ export function makeSqliteStore(databaseUrl) {
       return db.prepare(
         "SELECT job_id, COUNT(*) as count, MAX(ended_at) as last_run FROM runs WHERE scheduled_at >= ? AND scheduled_at < ? AND status = 'success' GROUP BY job_id"
       ).all(startIso, endIso);
+    },
+    countRunsByStatus() {
+      const rows = db
+        .prepare("SELECT status, COUNT(*) as count FROM runs GROUP BY status")
+        .all();
+      const out = { queued: 0, running: 0, success: 0, failed: 0, total: 0 };
+      for (const row of rows) {
+        const status = String(row.status || "");
+        const count = Number(row.count || 0);
+        if (Object.prototype.hasOwnProperty.call(out, status)) {
+          out[status] = count;
+        }
+        out.total += count;
+      }
+      return out;
     }
   };
 }

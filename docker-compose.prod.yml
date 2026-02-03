@@ -45,6 +45,9 @@ services:
       ROLE: api
       PORT: "8081"
       REDIS_URL: redis://redis:6379
+      RUN_ATTEMPTS: ${RUN_ATTEMPTS:-2}
+      RUN_BACKOFF_MS: ${RUN_BACKOFF_MS:-3000}
+      RUN_STALE_TIMEOUT_MINUTES: ${RUN_STALE_TIMEOUT_MINUTES:-30}
     depends_on:
       - redis
       - minio

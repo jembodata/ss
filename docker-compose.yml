@@ -48,6 +48,9 @@ services:
       DATABASE_USER: root
       DATABASE_PASSWORD: 123456
       DATABASE_NAME: ssrururu
+      RUN_ATTEMPTS: "2"
+      RUN_BACKOFF_MS: "3000"
+      RUN_STALE_TIMEOUT_MINUTES: "30"
 
       S3_ENDPOINT: http://minio:9000
       S3_ACCESS_KEY: minio
