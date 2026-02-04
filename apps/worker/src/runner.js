@@ -542,7 +542,7 @@ async function resolveFrameTarget(page, step, apiBase, runId, log) {
 async function smartWaitForSelector(page, target, selector, timeout, state = "attached") {
   try {
     await target.waitForSelector(selector, { timeout, state });
-    return;
+    return target;
   } catch {}
 
   const end = Date.now() + timeout;
@@ -553,7 +553,7 @@ async function smartWaitForSelector(page, target, selector, timeout, state = "at
         const handle = await frame.$(selector);
         if (handle) {
           await frame.waitForSelector(selector, { timeout: 2000, state });
-          return;
+          return frame;
         }
       } catch {}
     }
@@ -563,26 +563,20 @@ async function smartWaitForSelector(page, target, selector, timeout, state = "at
 }
 
 async function smartClick(page, target, selector, timeout) {
-  try {
-    await target.click(selector, { timeout });
-    return;
-  } catch {}
-
   const end = Date.now() + timeout;
+  let lastErr;
   while (Date.now() < end) {
-    const frames = [page, ...page.frames()];
-    for (const frame of frames) {
-      try {
-        const handle = await frame.$(selector);
-        if (handle) {
-          await frame.click(selector, { timeout: 2000 });
-          return;
-        }
-      } catch {}
+    try {
+      const remaining = Math.max(250, end - Date.now());
+      const frame = await smartWaitForSelector(page, target, selector, Math.min(5000, remaining), "visible");
+      await frame.click(selector, { timeout: 2000 });
+      return;
+    } catch (e) {
+      lastErr = e;
+      await page.waitForTimeout(250);
     }
-    await page.waitForTimeout(250);
   }
-  throw new Error(`smartClick timeout for ${selector}`);
+  throw new Error(`smartClick timeout for ${selector}${lastErr ? ` (${lastErr.message || lastErr})` : ""}`);
 }
 
 async function autoScrollForLazyLoad(page, apiBase, runId, log) {
