@@ -65,7 +65,8 @@ export async function runJob({ apiBase, s3, payload, log }) {
     let buffer;
     if (capture.mode === "element") {
       if (!capture.selector) throw new Error(`Capture '${name}' requires selector`);
-      const locator = page.locator(capture.selector);
+      const frame = await smartWaitForSelector(page, page, capture.selector, 30000, "visible");
+      const locator = frame.locator(capture.selector).first();
       await locator.waitFor({ state: "visible", timeout: 30000 });
       buffer = await locator.screenshot({ type: "png" });
     } else {
