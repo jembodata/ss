@@ -66,7 +66,9 @@ export async function runJob({ apiBase, s3, payload, log }) {
     if (capture.mode === "element") {
       if (!capture.selector) throw new Error(`Capture '${name}' requires selector`);
       const frame = await smartWaitForSelector(page, page, capture.selector, 30000, "visible");
-      const locator = frame.locator(capture.selector).first();
+      const frameSelector = splitFrameSelector(capture.selector);
+      const selector = frameSelector ? frameSelector.innerSelector : capture.selector;
+      const locator = frame.locator(selector).first();
       await locator.waitFor({ state: "visible", timeout: 30000 });
       buffer = await locator.screenshot({ type: "png" });
     } else {
@@ -427,7 +429,12 @@ async function runSingleStep(page, currentFrame, step, index, total, secrets, ap
       break;
     case "fill":
       if (!step.selector) throw new Error("fill requires selector");
-      await target.fill(step.selector, resolveValue(step.value, secrets));
+      {
+        const frame = await smartWaitForSelector(page, target, step.selector, timeout, "visible");
+        const frameSelector = splitFrameSelector(step.selector);
+        const selector = frameSelector ? frameSelector.innerSelector : step.selector;
+        await frame.fill(selector, resolveValue(step.value, secrets));
+      }
       break;
     case "type":
       await page.keyboard.type(resolveValue(step.value, secrets));
@@ -439,7 +446,7 @@ async function runSingleStep(page, currentFrame, step, index, total, secrets, ap
       await page.waitForTimeout(step.ms ?? 500);
       break;
     case "scroll":
-      await runScrollStep(target, step, timeout);
+      await runScrollStep(target, step, timeout, page);
       break;
     case "assertURLContains": {
       const expected = String(step.url || "").trim();
@@ -454,7 +461,10 @@ async function runSingleStep(page, currentFrame, step, index, total, secrets, ap
       const expected = String(resolveValue(step.value, secrets) || "").trim();
       if (!expected) throw new Error("assertTextContains requires expected text");
       if (step.selector) {
-        const locator = target.locator(step.selector).first();
+        const frame = await smartWaitForSelector(page, target, step.selector, timeout, "visible");
+        const frameSelector = splitFrameSelector(step.selector);
+        const selector = frameSelector ? frameSelector.innerSelector : step.selector;
+        const locator = frame.locator(selector).first();
         await locator.waitFor({ state: "visible", timeout });
         const text = (await locator.textContent()) || "";
         if (!text.includes(expected)) {
@@ -478,7 +488,7 @@ async function runSingleStep(page, currentFrame, step, index, total, secrets, ap
   }
 }
 
-async function runScrollStep(target, step, timeout) {
+async function runScrollStep(target, step, timeout, page) {
   const targetType = step.scrollTo || "bottom";
   const delayMs = Number.isFinite(step.scrollDelayMs) ? step.scrollDelayMs : 250;
   const steps = Number.isFinite(step.scrollSteps) ? Math.max(1, step.scrollSteps) : 6;
@@ -541,26 +551,13 @@ async function resolveFrameTarget(page, step, apiBase, runId, log) {
 }
 
 async function smartWaitForSelector(page, target, selector, timeout, state = "attached") {
-  try {
-    await target.waitForSelector(selector, { timeout, state });
-    return target;
-  } catch {}
-
-  const end = Date.now() + timeout;
-  while (Date.now() < end) {
-    const frames = [page, ...page.frames()];
-    for (const frame of frames) {
-      try {
-        const handle = await frame.$(selector);
-        if (handle) {
-          await frame.waitForSelector(selector, { timeout: 2000, state });
-          return frame;
-        }
-      } catch {}
-    }
-    await page.waitForTimeout(250);
+  const frameSelector = splitFrameSelector(selector);
+  if (frameSelector) {
+    return await waitForFrameSelector(page, frameSelector.frameSelector, frameSelector.innerSelector, timeout, state);
   }
-  throw new Error(`smartWaitForSelector timeout for ${selector}`);
+
+  await target.waitForSelector(selector, { timeout, state });
+  return target;
 }
 
 async function smartClick(page, target, selector, timeout) {
@@ -570,7 +567,12 @@ async function smartClick(page, target, selector, timeout) {
     try {
       const remaining = Math.max(250, end - Date.now());
       const frame = await smartWaitForSelector(page, target, selector, Math.min(5000, remaining), "visible");
-      await frame.click(selector, { timeout: 2000 });
+      const frameSelector = splitFrameSelector(selector);
+      if (frameSelector) {
+        await frame.click(frameSelector.innerSelector, { timeout: 2000 });
+      } else {
+        await frame.click(selector, { timeout: 2000 });
+      }
       return;
     } catch (e) {
       lastErr = e;
@@ -578,6 +580,39 @@ async function smartClick(page, target, selector, timeout) {
     }
   }
   throw new Error(`smartClick timeout for ${selector}${lastErr ? ` (${lastErr.message || lastErr})` : ""}`);
+}
+
+function splitFrameSelector(selector) {
+  if (typeof selector !== "string") return null;
+  if (!selector.includes(">>>")) return null;
+  const parts = selector.split(">>>");
+  if (parts.length < 2) return null;
+  const frameSelector = parts[0].trim();
+  const innerSelector = parts.slice(1).join(">>>").trim();
+  if (!frameSelector || !innerSelector) return null;
+  return { frameSelector, innerSelector };
+}
+
+async function waitForFrameSelector(page, frameSelector, innerSelector, timeout, state = "attached") {
+  const end = Date.now() + timeout;
+  while (Date.now() < end) {
+    try {
+      const handle = await page.$(frameSelector);
+      if (handle) {
+        const frame = await handle.contentFrame();
+        if (frame) {
+          const remaining = Math.max(500, end - Date.now());
+          await frame.waitForSelector(innerSelector, {
+            timeout: Math.min(3000, remaining),
+            state
+          });
+          return frame;
+        }
+      }
+    } catch {}
+    await page.waitForTimeout(250);
+  }
+  throw new Error(`smartWaitForSelector timeout for ${frameSelector} >>> ${innerSelector}`);
 }
 
 async function autoScrollForLazyLoad(page, apiBase, runId, log) {
