@@ -93,6 +93,7 @@ export const JobConfigSchema = z.object({
   startUrl: z.string().url(),
   navigationTimeoutMs: z.number().int().min(1000).max(300000).default(45000),
   captureDelayMs: z.number().int().min(0).max(300000).default(10000),
+  customCaptureCss: z.string().max(50000).default(""),
   login: z
     .object({
       enabled: z.boolean().default(false),

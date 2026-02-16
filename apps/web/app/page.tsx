@@ -25,6 +25,7 @@ import {
   TableRow,
   Tag,
   Tile,
+  TextArea,
   TextInput
 } from "@carbon/react";
 
@@ -51,6 +52,7 @@ const defaultJob = {
   startUrl: "https://example.com",
   navigationTimeoutMs: 45000,
   captureDelayMs: 10000,
+  customCaptureCss: "",
   login: { enabled: false, steps: [] as any[] },
   interaction: { enabled: false, steps: [] as any[], captureMode: "afterInteraction", bypassLazyLoad: false },
   postLoginSteps: [] as any[],
@@ -1551,6 +1553,16 @@ export default function Page() {
                         Add capture
                       </Button>
                     </div>
+                  </Tile>
+                  <Tile className="rounded-lg border border-slate-200 p-4">
+                    <TextArea
+                      id="custom-capture-css"
+                      labelText="Custom Capture CSS (optional)"
+                      helperText="Injected right before each screenshot. Useful for Metabase embed layout fixes."
+                      rows={6}
+                      value={jobCfg.customCaptureCss || ""}
+                      onChange={(e) => setJobCfg({ ...jobCfg, customCaptureCss: e.target.value })}
+                    />
                   </Tile>
                   <Tile className="rounded-lg border border-slate-200 p-4">
                     <Checkbox

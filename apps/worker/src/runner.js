@@ -49,6 +49,7 @@ export async function runJob({ apiBase, s3, payload, log }) {
 
   const captureOne = async (capture, phase) => {
     const name = capture.name || `${phase}-${capture.mode}`;
+    await applyCustomCaptureCss(page, jobCfg.customCaptureCss, apiBase, runId, log);
     if (jobCfg.interaction?.bypassLazyLoad) {
       await autoScrollForLazyLoad(page, apiBase, runId, log);
     }
@@ -648,4 +649,17 @@ function normalizeKey(key) {
 }
 function sanitize(name) {
   return String(name).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "").slice(0, 80) || "shot";
+}
+
+async function applyCustomCaptureCss(page, cssText, apiBase, runId, log) {
+  const css = typeof cssText === "string" ? cssText.trim() : "";
+  if (!css) return;
+  try {
+    await page.addStyleTag({ content: css });
+    await postProgress(apiBase, runId, "custom capture css applied");
+  } catch (err) {
+    const msg = `custom capture css failed: ${err?.message || err}`;
+    log(msg);
+    await postProgress(apiBase, runId, msg);
+  }
 }

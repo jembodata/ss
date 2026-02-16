@@ -26,6 +26,7 @@ import {
   TableHeader,
   TableRow,
   Tag,
+  TextArea,
   TextInput,
   Tile
 } from "@carbon/react";
@@ -236,6 +237,7 @@ export default function JobsPage() {
       startUrl: cfg.startUrl || "",
       navigationTimeoutMs: Number.isFinite(cfg.navigationTimeoutMs) ? cfg.navigationTimeoutMs : 45000,
       captureDelayMs: Number.isFinite(cfg.captureDelayMs) ? cfg.captureDelayMs : 10000,
+      customCaptureCss: typeof cfg.customCaptureCss === "string" ? cfg.customCaptureCss : "",
       login: {
         enabled: !!cfg.login?.enabled,
         steps: Array.isArray(cfg.login?.steps) ? cfg.login.steps : []
@@ -408,7 +410,22 @@ export default function JobsPage() {
             <Form aria-label="Edit job form">
               <Stack gap={6}>
               <TextInput id="edit-name" labelText="Job name" value={editName} onChange={(e) => setEditName(e.target.value)} />
-              <TextInput id="edit-profile" labelText="Profile ID" value={editProfile} onChange={(e) => setEditProfile(e.target.value)} />
+              <Select
+                id="edit-profile"
+                labelText="Profile"
+                value={editProfile}
+                onChange={(e) => setEditProfile(e.target.value)}
+              >
+                {Object.keys(profiles).length === 0 && (
+                  <SelectItem value="" text="No profiles available" />
+                )}
+                {Object.entries(profiles).map(([id, name]) => (
+                  <SelectItem key={id} value={id} text={`${name} (${id})`} />
+                ))}
+                {editProfile && !profiles[editProfile] && (
+                  <SelectItem value={editProfile} text={`Current (${editProfile})`} />
+                )}
+              </Select>
               <TextInput
                 id="edit-start-url"
                 labelText="Start URL"
@@ -441,6 +458,19 @@ export default function JobsPage() {
                   }
                 />
               </div>
+              <TextArea
+                id="edit-custom-capture-css"
+                labelText="Custom Capture CSS (optional)"
+                helperText="Injected right before each screenshot. Useful for Metabase embed layout fixes."
+                rows={6}
+                value={editJobCfg.customCaptureCss || ""}
+                onChange={(e) =>
+                  setEditJobCfg({
+                    ...editJobCfg,
+                    customCaptureCss: e.target.value
+                  })
+                }
+              />
               <Tile className="rounded-lg border border-slate-200 p-4">
                 <div className="text-sm font-semibold">Interaction</div>
                 <Checkbox
