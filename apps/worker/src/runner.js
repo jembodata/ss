@@ -658,8 +658,58 @@ async function applyCustomCaptureCss(page, cssText, apiBase, runId, log) {
     await page.addStyleTag({ content: css });
     await postProgress(apiBase, runId, "custom capture css applied");
   } catch (err) {
-    const msg = `custom capture css failed: ${err?.message || err}`;
-    log(msg);
-    await postProgress(apiBase, runId, msg);
+    const firstErr = `custom capture css styleTag failed: ${err?.message || err}`;
+    log(firstErr);
+    await postProgress(apiBase, runId, firstErr);
+    try {
+      const applied = await page.evaluate((rawCss) => {
+        // Best-effort parser for simple CSS blocks:
+        // selector { prop: value; prop2: value2; }
+        const blocks = String(rawCss)
+          .split("}")
+          .map((x) => x.trim())
+          .filter(Boolean);
+
+        let changed = 0;
+        for (const block of blocks) {
+          const parts = block.split("{");
+          if (parts.length < 2) continue;
+          const selector = parts[0].trim();
+          const body = parts.slice(1).join("{").trim();
+          if (!selector || !body) continue;
+
+          const rules = body
+            .split(";")
+            .map((r) => r.trim())
+            .filter(Boolean)
+            .map((r) => {
+              const idx = r.indexOf(":");
+              if (idx <= 0) return null;
+              const prop = r.slice(0, idx).trim();
+              const valueRaw = r.slice(idx + 1).trim();
+              if (!prop || !valueRaw) return null;
+              const important = /\!important$/i.test(valueRaw);
+              const value = valueRaw.replace(/\!important$/i, "").trim();
+              return { prop, value, important };
+            })
+            .filter(Boolean);
+
+          if (!rules.length) continue;
+          const nodes = document.querySelectorAll(selector);
+          nodes.forEach((el) => {
+            rules.forEach((rule) => {
+              el.style.setProperty(rule.prop, rule.value, rule.important ? "important" : "");
+            });
+            changed += 1;
+          });
+        }
+        return changed;
+      }, css);
+      await postProgress(apiBase, runId, `custom capture css fallback applied to ${applied} element(s)`);
+    } catch (fallbackErr) {
+      const msg = `custom capture css fallback failed: ${fallbackErr?.message || fallbackErr}`;
+      log(msg);
+      await postProgress(apiBase, runId, msg);
+    }
   }
 }
